@@ -8,11 +8,12 @@ Wyoming Orpheus provides a Wyoming protocol interface for the Orpheus-TTS system
 
 This server uses llama.cpp to run the Orpheus GGUF model locally, generating speech with various voices and emotional expressions without requiring an external API or service.
 
+The system uses the Hugging Face Hub library to automatically download the required model file if it's not found locally.
+
 ## Prerequisites
 
 1. Python 3.8 or later
-2. The Orpheus TTS GGUF model file 
-   - Download from [Hugging Face](https://huggingface.co/hubertsiuzdak/orpheus-3b-0.1-ft-q4_K_M)
+2. Approximately 4GB of disk space for the Orpheus model (will be downloaded automatically)
 
 ## Installation
 
@@ -34,7 +35,15 @@ script/setup
 
 ## Usage
 
-Run the Wyoming Orpheus server, pointing to your downloaded Orpheus model:
+Run the Wyoming Orpheus server:
+
+```sh
+wyoming-orpheus --uri 'tcp://0.0.0.0:10200'
+```
+
+The model will be automatically downloaded on first run if not found locally.
+
+If you already have the model file:
 
 ```sh
 wyoming-orpheus \
@@ -71,14 +80,14 @@ wyoming-orpheus \
 
 Orpheus comes with several built-in voices:
 
-- `tara` - Female voice with natural intonation (default)
-- `leah` - Female voice with warm tone
-- `jess` - Female voice with clear articulation
-- `leo` - Male voice with deep tone
-- `dan` - Male voice with natural pacing
-- `mia` - Female voice with expressive range
-- `zac` - Male voice with casual style
-- `zoe` - Female voice with bright tone
+- `tara` - Female voice (default)
+- `leah` - Female voice
+- `jess` - Female voice
+- `leo` - Male voice
+- `dan` - Male voice
+- `mia` - Female voice
+- `zac` - Male voice
+- `zoe` - Female voice
 
 ## Emotion Tags
 

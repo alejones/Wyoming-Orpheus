@@ -1,4 +1,5 @@
 """Process management for Orpheus TTS using llama.cpp."""
+
 import argparse
 import asyncio
 import logging
@@ -6,9 +7,9 @@ import os
 import time
 from typing import Optional
 
-from llama_cpp import Llama # type: ignore
+from llama_cpp import Llama
 
-from .file_hash import verify_model_file
+from .model_utils import DEFAULT_REPO_ID, ensure_model_exists, verify_model_file
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ class OrpheusModelManager:
     def __init__(self, args: argparse.Namespace):
         """Initialize the model manager."""
         self.args = args
-        self.model = None
+        self.model: Optional[Llama] = None
         self.model_path = args.model_path
         self.lock = asyncio.Lock()
         self.last_load_attempt = 0.0
@@ -36,15 +37,36 @@ class OrpheusModelManager:
 
             if self.model is None:
                 try:
+                    # Ensure the model exists, downloading if necessary
+                    try:
+                        model_path = ensure_model_exists(
+                            self.model_path,
+                            repo_id=getattr(self.args, "repo_id", DEFAULT_REPO_ID),
+                            model_cache_dir=self.args.model_cache_dir,
+                            force_download=getattr(self.args, "force_download", False),
+                            no_download=getattr(self.args, "no_download", False),
+                        )
+                        # Update the model path to the actual location
+                        self.model_path = model_path
+                    except FileNotFoundError as e:
+                        _LOGGER.error(f"Model not found: {e}")
+                        self.last_load_attempt = current_time
+                        self.load_failed = True
+                        return None
+
                     _LOGGER.info(f"Loading Orpheus model from {self.model_path}")
-                    
+
                     # Verify model file if verification is enabled
                     if getattr(self.args, "verify_model", False):
                         if not verify_model_file(self.model_path):
-                            _LOGGER.warning("Model verification failed, but continuing with loading")
-                    
+                            _LOGGER.warning(
+                                "Model verification failed, but continuing with loading"
+                            )
+
                     # Use environment variables to control thread count
-                    if self.args.n_threads > 0 and not os.environ.get("LLAMA_CPP_N_THREADS"):
+                    if self.args.n_threads > 0 and not os.environ.get(
+                        "LLAMA_CPP_N_THREADS"
+                    ):
                         os.environ["LLAMA_CPP_N_THREADS"] = str(self.args.n_threads)
 
                     # Determine context size based on model size
@@ -56,11 +78,11 @@ class OrpheusModelManager:
                     self.model = Llama(
                         model_path=str(self.model_path),
                         verbose=self.args.debug,
-                        **context_params
+                        **context_params,
                     )
                     _LOGGER.info("Model loaded successfully")
                     self.load_failed = False
-                    
+
                 except Exception as e:
                     self.last_load_attempt = current_time
                     self.load_failed = True

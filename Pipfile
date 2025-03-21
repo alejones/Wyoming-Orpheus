@@ -9,6 +9,7 @@ snac = "*"
 sounddevice = "*"
 llama-cpp-python = "*"
 numpy = "*"
+huggingface-hub = "*"
 
 [dev-packages]
 

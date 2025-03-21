@@ -1,0 +1,17 @@
+version: '3'
+
+services:
+  orpheus-tts:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "10200:10200"
+    volumes:
+      - ./models:/models
+    environment:
+      - VOICE=tara
+      - N_THREADS=4
+      - MODEL_PATH=orpheus-3b-0.1-ft-q4_K_M.gguf
+      - PORT=10200
+    restart: unless-stopped

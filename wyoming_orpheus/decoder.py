@@ -97,7 +97,6 @@ def convert_to_audio(multiframe: List[int], count: int) -> Optional[bytes]:
     if model is None:
         initialize_model()
     
-    frames = []
     if len(multiframe) < 7:
         return None
     

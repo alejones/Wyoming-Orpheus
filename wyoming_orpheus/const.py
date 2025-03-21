@@ -1,4 +1,5 @@
 """Constants for the Orpheus TTS Wyoming server using llama.cpp."""
+
 from typing import Dict, Final, List, Set
 
 # Model parameters
@@ -41,14 +42,14 @@ EMOTION_TAGS: Final[Set[str]] = {
 
 # Voice descriptions for info messages
 VOICE_DESCRIPTIONS: Final[Dict[str, str]] = {
-    "tara": "Female voice with natural intonation",
-    "leah": "Female voice with warm tone",
-    "jess": "Female voice with clear articulation",
-    "leo": "Male voice with deep tone",
-    "dan": "Male voice with natural pacing",
-    "mia": "Female voice with expressive range",
-    "zac": "Male voice with casual style",
-    "zoe": "Female voice with bright tone",
+    "tara": "Female voice",
+    "leah": "Female voice",
+    "jess": "Female voice",
+    "leo": "Male voice",
+    "dan": "Male voice",
+    "mia": "Female voice",
+    "zac": "Male voice",
+    "zoe": "Female voice",
 }
 
 # Model settings

@@ -1,0 +1,16 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = false
+name = "pip_conf_index_global"
+
+[packages]
+wyoming = "*"
+snac = "*"
+sounddevice = "*"
+llama-cpp-python = "*"
+numpy = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.12"

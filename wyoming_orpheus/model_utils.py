@@ -166,14 +166,14 @@ def ensure_model_exists(
                 cache_dir = str(model_cache_dir)
 
             # Download the file
-            downloaded_path = hf_hub_download(
+            downloaded_str: str = hf_hub_download(
                 repo_id=repo_id,
                 filename=filename,
                 cache_dir=cache_dir,
                 force_download=force_download,
             )
 
-            downloaded_path = Path(downloaded_path)
+            downloaded_path = Path(downloaded_str)
             _LOGGER.info(f"Model downloaded to {downloaded_path}")
 
             # If a specific output path was requested, copy the file there

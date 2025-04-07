@@ -41,10 +41,10 @@ class OrpheusModelManager:
                     try:
                         model_path = ensure_model_exists(
                             self.model_path,
-                            repo_id=getattr(self.args, "repo_id", DEFAULT_REPO_ID),
+                            repo_id=self.args.repo_id,
                             model_cache_dir=self.args.model_cache_dir,
-                            force_download=getattr(self.args, "force_download", False),
-                            no_download=getattr(self.args, "no_download", False),
+                            force_download=self.args.force_download,
+                            no_download=self.args.no_download,
                         )
                         # Update the model path to the actual location
                         self.model_path = model_path
@@ -57,13 +57,14 @@ class OrpheusModelManager:
                     _LOGGER.info(f"Loading Orpheus model from {self.model_path}")
 
                     # Verify model file if verification is enabled
-                    if getattr(self.args, "verify_model", False):
+                    if self.args.verify_model:
                         if not verify_model_file(self.model_path):
                             _LOGGER.warning(
                                 "Model verification failed, but continuing with loading"
                             )
 
                     # Use environment variables to control thread count
+                    # llama_cpp library often relies on this env var for thread control
                     if self.args.n_threads > 0 and not os.environ.get(
                         "LLAMA_CPP_N_THREADS"
                     ):

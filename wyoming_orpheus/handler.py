@@ -60,6 +60,46 @@ class OrpheusEventHandler(AsyncEventHandler):
             _LOGGER.exception("Error during synthesis")
             return False
 
+    async def _stream_wav_file(self, wav_path: Path) -> None:
+        """Read a WAV file and stream it chunk by chunk."""
+        wav_file: wave.Wave_read = wave.open(str(wav_path), "rb")
+        with wav_file:
+            rate = wav_file.getframerate()
+            width = wav_file.getsampwidth()
+            channels = wav_file.getnchannels()
+
+            # Send audio start event
+            await self.write_event(
+                AudioStart(
+                    rate=rate,
+                    width=width,
+                    channels=channels,
+                ).event(),
+            )
+
+            # Read the entire audio file
+            audio_bytes = wav_file.readframes(wav_file.getnframes())
+            bytes_per_sample = width * channels
+            bytes_per_chunk = bytes_per_sample * self.cli_args.samples_per_chunk
+            num_chunks = int(math.ceil(len(audio_bytes) / bytes_per_chunk))
+
+            # Split into chunks
+            for i in range(num_chunks):
+                offset = i * bytes_per_chunk
+                chunk = audio_bytes[offset : offset + bytes_per_chunk]
+                await self.write_event(
+                    AudioChunk(
+                        audio=chunk,
+                        rate=rate,
+                        width=width,
+                        channels=channels,
+                    ).event(),
+                )
+
+        # Send audio stop event
+        await self.write_event(AudioStop().event())
+        _LOGGER.debug("Finished streaming WAV file")
+
     async def _handle_synthesize(self, event: Event) -> bool:
         """Handle a Synthesize event."""
         synthesize = Synthesize.from_event(event)
@@ -134,43 +174,8 @@ class OrpheusEventHandler(AsyncEventHandler):
                 )
                 return False
 
-            # Open the WAV file to get the audio format details
-            wav_file: wave.Wave_read = wave.open(str(output_file), "rb")
-            with wav_file:
-                rate = wav_file.getframerate()
-                width = wav_file.getsampwidth()
-                channels = wav_file.getnchannels()
-
-                # Send audio start event
-                await self.write_event(
-                    AudioStart(
-                        rate=rate,
-                        width=width,
-                        channels=channels,
-                    ).event(),
-                )
-
-                # Read the entire audio file
-                audio_bytes = wav_file.readframes(wav_file.getnframes())
-                bytes_per_sample = width * channels
-                bytes_per_chunk = bytes_per_sample * self.cli_args.samples_per_chunk
-                num_chunks = int(math.ceil(len(audio_bytes) / bytes_per_chunk))
-
-                # Split into chunks
-                for i in range(num_chunks):
-                    offset = i * bytes_per_chunk
-                    chunk = audio_bytes[offset : offset + bytes_per_chunk]
-                    await self.write_event(
-                        AudioChunk(
-                            audio=chunk,
-                            rate=rate,
-                            width=width,
-                            channels=channels,
-                        ).event(),
-                    )
-
-            # Send audio stop event
-            await self.write_event(AudioStop().event())
+            # Stream the generated WAV file
+            await self._stream_wav_file(output_file)
             _LOGGER.debug("Completed request")
 
         return True

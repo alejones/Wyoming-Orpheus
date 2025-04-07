@@ -15,11 +15,10 @@ _LOGGER = logging.getLogger(__name__)
 
 # Default Hugging Face repository and model information
 DEFAULT_REPO_ID = "isaiahbjork/orpheus-3b-0.1-ft-Q4_K_M-GGUF"
-DEFAULT_MODEL_FILENAME = "orpheus-3b-0.1-ft-q4_K_M.gguf"
+DEFAULT_MODEL_FILENAME = "orpheus-3b-0.1-ft-q4_k_m.gguf"
 
-# Expected model hashes - update as new models are released
 MODEL_HASHES: Dict[str, str] = {
-    "orpheus-3b-0.1-ft-q4_k_m.gguf": "44e874b701c348e7ef53f4c9bcfbdd5fe5c7c35c3c60a4eb15a7696c4102663a",
+    "orpheus-3b-0.1-ft-q4_k_m.gguf": "18284d3efd9831d0a8409f5f5877c84bff69009df7c3db818e904dccea6b6c55",
 }
 
 

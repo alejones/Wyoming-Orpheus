@@ -1,25 +1,22 @@
 """Event handler for Wyoming clients."""
+
 import argparse
-import asyncio
 import logging
 import math
-import os
 import tempfile
 import time
 import wave
 from pathlib import Path
-from typing import List, Optional
 
-from wyoming.audio import AudioChunk, AudioStart, AudioStop # type: ignore
-from wyoming.error import Error # type: ignore
-from wyoming.event import Event # type: ignore
-from wyoming.info import Describe, Info # type: ignore
-from wyoming.server import AsyncEventHandler # type: ignore
-from wyoming.tts import Synthesize # type: ignore
+from wyoming.audio import AudioChunk, AudioStart, AudioStop  # type: ignore
+from wyoming.error import Error  # type: ignore
+from wyoming.event import Event  # type: ignore
+from wyoming.info import Describe, Info  # type: ignore
+from wyoming.server import AsyncEventHandler  # type: ignore
+from wyoming.tts import Synthesize  # type: ignore
 
-import orpheus # type: ignore
 from .const import AVAILABLE_VOICES, DEFAULT_VOICE, SAMPLE_RATE, VOICE_DESCRIPTIONS
-from .orpheus import TTSConfig
+from .orpheus import TTSConfig, generate_speech_from_llama
 from .process import OrpheusModelManager
 
 _LOGGER = logging.getLogger(__name__)
@@ -86,7 +83,7 @@ class OrpheusEventHandler(AsyncEventHandler):
                 text = text + self.cli_args.auto_punctuation[0]
 
         _LOGGER.debug("synthesize: raw_text=%s, text='%s'", raw_text, text)
-        
+
         # Get voice name
         voice_name: str = DEFAULT_VOICE
         if synthesize.voice is not None and synthesize.voice.name:
@@ -109,8 +106,7 @@ class OrpheusEventHandler(AsyncEventHandler):
         if model is None:
             await self.write_event(
                 Error(
-                    text="Failed to load Orpheus model", 
-                    code="ModelLoadError"
+                    text="Failed to load Orpheus model", code="ModelLoadError"
                 ).event()
             )
             return False
@@ -119,7 +115,7 @@ class OrpheusEventHandler(AsyncEventHandler):
         with tempfile.TemporaryDirectory() as temp_dir:
             # Generate speech
             output_file = Path(temp_dir) / f"{voice_name}_{int(time.time())}.wav"
-            audio_segments = orpheus.generate_speech_from_llama(
+            audio_segments = generate_speech_from_llama(
                 llama_model=model,
                 prompt=text,
                 voice=config.voice,

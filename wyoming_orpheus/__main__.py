@@ -234,7 +234,7 @@ async def main() -> None:
     )
 
 
-def run():
+def run() -> None:
     """Run the program."""
     try:
         asyncio.run(main())

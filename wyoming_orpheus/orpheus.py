@@ -1,4 +1,5 @@
 """Orpheus TTS integration for Wyoming using llama.cpp."""
+
 import logging
 import re
 import wave
@@ -6,8 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Generator, List, Optional
 
-from . import decoder
 from .const import (
+    AUDIO_END_TOKEN,
+    AUDIO_START_TOKEN,
     AVAILABLE_VOICES,
     CHUNK_LIMIT,
     DEFAULT_VOICE,
@@ -17,9 +19,8 @@ from .const import (
     SAMPLE_RATE,
     TEMPERATURE,
     TOP_P,
-    AUDIO_START_TOKEN,
-    AUDIO_END_TOKEN
 )
+from .decoder import SnacDecoder
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -139,10 +140,10 @@ def generate_tokens_from_llama(
             token_text = output["choices"][0]["text"]
             if token_text:
                 yield token_text
-                
+
     except Exception as e:
         _LOGGER.error(f"Error generating tokens: {e}")
-    
+
     _LOGGER.debug("Token generation complete")
 
 
@@ -174,8 +175,8 @@ def generate_speech_from_llama(
     Returns:
         List of audio segments as bytes
     """
-    # Initialize the decoder model
-    decoder.initialize_model()
+    # Initialize the SNAC decoder
+    snac_decoder = SnacDecoder()
 
     # If prompt is longer than chunk_max_length, split it into chunks
     if len(prompt) > chunk_max_length:
@@ -186,7 +187,7 @@ def generate_speech_from_llama(
 
         for i, chunk in enumerate(chunks):
             _LOGGER.debug(f"Processing chunk {i + 1}/{len(chunks)}: {chunk[:50]}...")
-            
+
             # Generate tokens and convert to audio
             token_gen = generate_tokens_from_llama(
                 llama_model=llama_model,
@@ -197,9 +198,9 @@ def generate_speech_from_llama(
                 max_tokens=max_tokens,
                 repetition_penalty=repetition_penalty,
             )
-            
+
             # Collect audio segments
-            chunk_segments = list(decoder.tokens_decoder_sync(token_gen))
+            chunk_segments = list(snac_decoder.tokens_decoder_sync(token_gen))
             all_audio_segments.extend(chunk_segments)
 
         # Write to WAV file if requested
@@ -231,10 +232,10 @@ def generate_speech_from_llama(
             max_tokens=max_tokens,
             repetition_penalty=repetition_penalty,
         )
-        
+
         # Convert tokens to audio
-        audio_segments = list(decoder.tokens_decoder_sync(token_gen))
-        
+        audio_segments = list(snac_decoder.tokens_decoder_sync(token_gen))
+
         # Write to WAV file if requested
         if output_file:
             output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -244,7 +245,7 @@ def generate_speech_from_llama(
                 wav_file.setframerate(SAMPLE_RATE)
                 for segment in audio_segments:
                     wav_file.writeframes(segment)
-                    
+
         return audio_segments
 
 

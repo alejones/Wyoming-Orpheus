@@ -174,3 +174,4 @@ cython_debug/
 .pypirc
 .aider*
 local/orpheus-3b-0.1-ft-q4_k_m.gguf
+tests/orpheus_output.wav

@@ -26,3 +26,10 @@ version = {file = "wyoming_orpheus/VERSION"}
 
 [tool.setuptools.package-data]
 wyoming_orpheus = ["VERSION"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    "ignore::DeprecationWarning:python_speech_features.sigproc:",
+]

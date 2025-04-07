@@ -90,8 +90,8 @@ async def test_orpheus() -> None:
         "--model-path",
         str(model_path),
         "--voice",
-        "tara",  # Using default voice
-        "--threads",
+        "tara",
+        "--n-threads",
         "4",
         "--n-ctx",
         "2048",
@@ -99,113 +99,129 @@ async def test_orpheus() -> None:
         stdin=PIPE,
         stdout=PIPE,
     )
-    assert proc.stdin is not None
-    assert proc.stdout is not None
+    try:
+        assert proc.stdin is not None
+        assert proc.stdout is not None
 
-    # Check info
-    await async_write_event(Describe().event(), proc.stdin)
-    while True:
-        event = await asyncio.wait_for(async_read_event(proc.stdout), timeout=_TIMEOUT)
-        assert event is not None
+        # Check info
+        await async_write_event(Describe().event(), proc.stdin)
+        while True:
+            event = await asyncio.wait_for(
+                async_read_event(proc.stdout), timeout=_TIMEOUT
+            )
+            assert event is not None
 
-        if not Info.is_type(event.type):
-            continue
+            if not Info.is_type(event.type):
+                continue
 
-        info = Info.from_event(event)
-        assert len(info.tts) == 1, "Expected one tts service"
-        tts = info.tts[0]
-        assert len(tts.voices) > 0, "Expected at least one voice"
-        voice_model = next((v for v in tts.voices if v.name == "tara"), None)
-        assert voice_model is not None, "Expected tara voice"
-        break
-
-    # Synthesize text - using the same text as the reference file
-    await async_write_event(
-        Synthesize(_TEST_TEXT, voice=SynthesizeVoice("tara")).event(),
-        proc.stdin,
-    )
-
-    # Expect audio start event
-    event = await asyncio.wait_for(async_read_event(proc.stdout), timeout=_TIMEOUT)
-    assert event is not None
-    assert AudioStart.is_type(event.type), f"Expected AudioStart, got {event.type}"
-    audio_start = AudioStart.from_event(event)
-
-    # Load reference audio for comparison
-    with wave.open(str(reference_wav_path), "rb") as wav_file:
-        expected_framerate = wav_file.getframerate()
-        # expected_sampwidth = wav_file.getsampwidth()
-        # expected_channels = wav_file.getnchannels()
-        expected_audio = wav_file.readframes(wav_file.getnframes())
-        expected_array = np.frombuffer(expected_audio, dtype=np.int16)
-
-    # Collect audio chunks
-    actual_audio = bytes()
-    while True:
-        event = await asyncio.wait_for(async_read_event(proc.stdout), timeout=_TIMEOUT)
-        assert event is not None
-
-        if AudioStop.is_type(event.type):
+            info = Info.from_event(event)
+            assert len(info.tts) == 1, "Expected one tts service"
+            tts = info.tts[0]
+            assert len(tts.voices) > 0, "Expected at least one voice"
+            voice_model = next((v for v in tts.voices if v.name == "tara"), None)
+            assert voice_model is not None, "Expected tara voice"
             break
 
-        if AudioChunk.is_type(event.type):
-            chunk = AudioChunk.from_event(event)
-            assert chunk.rate == audio_start.rate
-            assert chunk.width == audio_start.width
-            assert chunk.channels == audio_start.channels
-            actual_audio += chunk.audio
+        # Synthesize text - using the same text as the reference file
+        await async_write_event(
+            Synthesize(_TEST_TEXT, voice=SynthesizeVoice("tara")).event(),
+            proc.stdin,
+        )
 
-    # Ensure we got some audio data
-    assert len(actual_audio) > 0, "No audio data received"
-    actual_array = np.frombuffer(actual_audio, dtype=np.int16)
+        # Expect audio start event
+        event = await asyncio.wait_for(async_read_event(proc.stdout), timeout=_TIMEOUT)
+        assert event is not None
+        assert AudioStart.is_type(event.type), f"Expected AudioStart, got {event.type}"
+        audio_start = AudioStart.from_event(event)
 
-    # Save the generated audio for comparison/debugging
-    output_wav_path = _DIR / "orpheus_output.wav"
-    with wave.open(str(output_wav_path), "wb") as wav_file:
-        wav_file.setnchannels(audio_start.channels)
-        wav_file.setsampwidth(audio_start.width)
-        wav_file.setframerate(audio_start.rate)
-        wav_file.writeframes(actual_audio)
+        # Load reference audio for comparison
+        with wave.open(str(reference_wav_path), "rb") as wav_file:
+            expected_framerate = wav_file.getframerate()
+            # expected_sampwidth = wav_file.getsampwidth()
+            # expected_channels = wav_file.getnchannels()
+            expected_audio = wav_file.readframes(wav_file.getnframes())
+            expected_array = np.frombuffer(expected_audio, dtype=np.int16)
 
-    print(f"Saved output audio to {output_wav_path}")
+        # Collect audio chunks
+        actual_audio = bytes()
+        while True:
+            event = await asyncio.wait_for(
+                async_read_event(proc.stdout), timeout=_TIMEOUT
+            )
+            assert event is not None
 
-    # Check audio parameters match our expectations
-    assert audio_start.rate == 24000, (
-        f"Expected 24000 Hz sample rate, got {audio_start.rate}"
-    )
-    assert audio_start.width == 2, (
-        f"Expected 16-bit audio (width=2), got {audio_start.width}"
-    )
-    assert audio_start.channels == 1, (
-        f"Expected mono audio, got {audio_start.channels} channels"
-    )
+            if AudioStop.is_type(event.type):
+                break
 
-    # Check that we got a reasonable amount of audio data
-    min_expected_duration = 2.0  # seconds
-    min_expected_samples = int(min_expected_duration * audio_start.rate)
-    assert len(actual_array) >= min_expected_samples, (
-        f"Audio too short, got {len(actual_array) / audio_start.rate:.2f} seconds, "
-        f"expected at least {min_expected_duration:.2f} seconds"
-    )
+            if AudioChunk.is_type(event.type):
+                chunk = AudioChunk.from_event(event)
+                assert chunk.rate == audio_start.rate
+                assert chunk.width == audio_start.width
+                assert chunk.channels == audio_start.channels
+                actual_audio += chunk.audio
 
-    # Compute dynamic time warping (DTW) distance of MFCC features to compare audio similarity
-    print("Computing MFCC features for reference and generated audio...")
-    expected_mfcc = python_speech_features.mfcc(
-        expected_array, samplerate=expected_framerate
-    )
-    actual_mfcc = python_speech_features.mfcc(actual_array, samplerate=audio_start.rate)
+        # Ensure we got some audio data
+        assert len(actual_audio) > 0, "No audio data received"
+        actual_array = np.frombuffer(actual_audio, dtype=np.int16)
 
-    # Compute DTW distance - this measures similarity between the two audio files
-    # Lower values indicate more similar audio
-    dtw_distance = compute_optimal_path(actual_mfcc, expected_mfcc)
-    print(f"DTW distance between reference and generated audio: {dtw_distance}")
+        # Save the generated audio for comparison/debugging
+        output_wav_path = _DIR / "orpheus_output.wav"
+        with wave.open(str(output_wav_path), "wb") as wav_file:
+            wav_file.setnchannels(audio_start.channels)
+            wav_file.setsampwidth(audio_start.width)
+            wav_file.setframerate(audio_start.rate)
+            wav_file.writeframes(actual_audio)
 
-    # The acceptable threshold depends on your specific use case and quality requirements
-    # You may need to adjust this based on empirical testing
-    max_acceptable_distance = 15
-    assert dtw_distance < max_acceptable_distance, (
-        f"Audio differs too much from reference (DTW distance: {dtw_distance}, "
-        f"max acceptable: {max_acceptable_distance})"
-    )
+        print(f"Saved output audio to {output_wav_path}")
 
-    print("Test passed successfully!")
+        # Check audio parameters match our expectations
+        assert audio_start.rate == 24000, (
+            f"Expected 24000 Hz sample rate, got {audio_start.rate}"
+        )
+        assert audio_start.width == 2, (
+            f"Expected 16-bit audio (width=2), got {audio_start.width}"
+        )
+        assert audio_start.channels == 1, (
+            f"Expected mono audio, got {audio_start.channels} channels"
+        )
+
+        # Check that we got a reasonable amount of audio data
+        min_expected_duration = 2.0  # seconds
+        min_expected_samples = int(min_expected_duration * audio_start.rate)
+        assert len(actual_array) >= min_expected_samples, (
+            f"Audio too short, got {len(actual_array) / audio_start.rate:.2f} seconds, "
+            f"expected at least {min_expected_duration:.2f} seconds"
+        )
+
+        # Compute dynamic time warping (DTW) distance of MFCC features to compare audio similarity
+        print("Computing MFCC features for reference and generated audio...")
+        expected_mfcc = python_speech_features.mfcc(
+            expected_array, samplerate=expected_framerate
+        )
+        actual_mfcc = python_speech_features.mfcc(
+            actual_array, samplerate=audio_start.rate
+        )
+
+        # Compute DTW distance - this measures similarity between the two audio files
+        # Lower values indicate more similar audio
+        dtw_distance = compute_optimal_path(actual_mfcc, expected_mfcc)
+        print(f"DTW distance between reference and generated audio: {dtw_distance}")
+
+        # The acceptable threshold depends on your specific use case and quality requirements
+        # You may need to adjust this based on empirical testing
+        max_acceptable_distance = 15
+        assert dtw_distance < max_acceptable_distance, (
+            f"Audio differs too much from reference (DTW distance: {dtw_distance}, "
+            f"max acceptable: {max_acceptable_distance})"
+        )
+
+        print("Test passed successfully!")
+    finally:
+        # Ensure proper cleanup of subprocess
+        if proc.returncode is None:
+            try:
+                proc.terminate()
+                await asyncio.wait_for(proc.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()

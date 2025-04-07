@@ -108,6 +108,11 @@ class SnacDecoder:
         if len(multiframe) < TOKENS_PER_FRAME:
             return None
 
+        # SNAC expects codes organized into three groups based on their position
+        # within the 7-token frame structure.
+        # codes_0: Token at index 0
+        # codes_1: Tokens at indices 1, 4
+        # codes_2: Tokens at indices 2, 3, 5, 6
         codes_0 = torch.tensor([], device=self.device, dtype=torch.int32)
         codes_1 = torch.tensor([], device=self.device, dtype=torch.int32)
         codes_2 = torch.tensor([], device=self.device, dtype=torch.int32)
@@ -115,8 +120,12 @@ class SnacDecoder:
         num_frames = len(multiframe) // TOKENS_PER_FRAME
         frame = multiframe[: num_frames * TOKENS_PER_FRAME]
 
+        # TODO: This loop could potentially be replaced with more efficient
+        # tensor slicing and reshaping if the exact pattern is confirmed.
         for j in range(num_frames):
-            i = TOKENS_PER_FRAME * j
+            i = TOKENS_PER_FRAME * j # Start index of the current frame
+
+            # Extract token 0 for codes_0
             if codes_0.shape[0] == 0:
                 codes_0 = torch.tensor(
                     [frame[i]], device=self.device, dtype=torch.int32
@@ -129,6 +138,7 @@ class SnacDecoder:
                     ]
                 )
 
+            # Extract tokens 1 and 4 for codes_1
             if codes_1.shape[0] == 0:
                 codes_1 = torch.tensor(
                     [frame[i + 1]], device=self.device, dtype=torch.int32
@@ -159,6 +169,7 @@ class SnacDecoder:
                     ]
                 )
 
+            # Extract tokens 2, 3, 5, 6 for codes_2
             if codes_2.shape[0] == 0:
                 codes_2 = torch.tensor(
                     [frame[i + 2]], device=self.device, dtype=torch.int32

@@ -1,6 +1,5 @@
 """Event handler for Wyoming clients."""
 
-import argparse
 import logging
 import math
 import tempfile
@@ -15,8 +14,9 @@ from wyoming.info import Describe, Info  # type: ignore
 from wyoming.server import AsyncEventHandler  # type: ignore
 from wyoming.tts import Synthesize  # type: ignore
 
-from .const import AVAILABLE_VOICES, DEFAULT_VOICE, SAMPLE_RATE, VOICE_DESCRIPTIONS
-from .orpheus import TTSConfig, generate_speech_from_llama
+from .config import OrpheusConfig
+from .const import AVAILABLE_VOICES, DEFAULT_VOICE, SAMPLE_RATE
+from .orpheus import generate_speech_from_llama
 from .process import OrpheusModelManager
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,15 +28,15 @@ class OrpheusEventHandler(AsyncEventHandler):
     def __init__(
         self,
         wyoming_info: Info,
-        cli_args: argparse.Namespace,
+        config: OrpheusConfig,
         model_manager: OrpheusModelManager,
         *args,
         **kwargs,
     ) -> None:
-        """Initialize the event handler."""
+        """Initialize the event handler with a Pydantic config."""
         super().__init__(*args, **kwargs)
 
-        self.cli_args = cli_args
+        self.config = config
         self.wyoming_info_event = wyoming_info.event()
         self.model_manager = model_manager
 
@@ -80,7 +80,7 @@ class OrpheusEventHandler(AsyncEventHandler):
             # Read the entire audio file
             audio_bytes = wav_file.readframes(wav_file.getnframes())
             bytes_per_sample = width * channels
-            bytes_per_chunk = bytes_per_sample * self.cli_args.samples_per_chunk
+            bytes_per_chunk = bytes_per_sample * self.config.server.samples_per_chunk
             num_chunks = int(math.ceil(len(audio_bytes) / bytes_per_chunk))
 
             # Split into chunks
@@ -111,16 +111,15 @@ class OrpheusEventHandler(AsyncEventHandler):
         text = " ".join(raw_text.strip().splitlines())
 
         # Add automatic punctuation (important for some voices)
-        # TODO is this necessary?
-        if self.cli_args.auto_punctuation and text:
+        if self.config.server.auto_punctuation and text:
             has_punctuation = False
-            for punc_char in self.cli_args.auto_punctuation:
+            for punc_char in self.config.server.auto_punctuation:
                 if text[-1] == punc_char:
                     has_punctuation = True
                     break
 
             if not has_punctuation:
-                text = text + self.cli_args.auto_punctuation[0]
+                text = text + self.config.server.auto_punctuation[0]
 
         _LOGGER.debug("synthesize: raw_text=%s, text='%s'", raw_text, text)
 
@@ -131,15 +130,6 @@ class OrpheusEventHandler(AsyncEventHandler):
             if voice_name not in AVAILABLE_VOICES:
                 _LOGGER.warning(f"Unknown voice: {voice_name}, using {DEFAULT_VOICE}")
                 voice_name = DEFAULT_VOICE
-
-        # Create config for TTS
-        config = TTSConfig(
-            voice=voice_name,
-            temperature=self.cli_args.temperature,
-            top_p=self.cli_args.top_p,
-            repetition_penalty=self.cli_args.repetition_penalty,
-            chunk_max_length=self.cli_args.chunk_max_length,
-        )
 
         # Get the model
         model = await self.model_manager.get_model()
@@ -158,12 +148,13 @@ class OrpheusEventHandler(AsyncEventHandler):
             audio_segments = generate_speech_from_llama(
                 llama_model=model,
                 prompt=text,
-                voice=config.voice,
+                voice=voice_name,
                 output_file=output_file,
-                temperature=config.temperature,
-                top_p=config.top_p,
-                repetition_penalty=config.repetition_penalty,
-                chunk_max_length=config.chunk_max_length,
+                temperature=self.config.tts.temperature,
+                top_p=self.config.tts.top_p,
+                max_tokens=self.config.tts.max_tokens,
+                repetition_penalty=self.config.tts.repetition_penalty,
+                chunk_max_length=self.config.tts.chunk_max_length,
             )
 
             if not audio_segments:

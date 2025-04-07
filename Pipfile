@@ -10,6 +10,7 @@ sounddevice = "*"
 llama-cpp-python = "*"
 numpy = "*"
 huggingface-hub = "*"
+pydantic = "*"
 
 [dev-packages]
 pytest-asyncio = "*"

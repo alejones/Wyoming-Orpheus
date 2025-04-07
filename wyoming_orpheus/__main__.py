@@ -12,16 +12,8 @@ from wyoming.info import Attribution, Info, TtsProgram, TtsVoice  # type: ignore
 from wyoming.server import AsyncServer  # type: ignore
 
 from . import __version__
-from .const import (
-    AVAILABLE_VOICES,
-    CHUNK_LIMIT,
-    DEFAULT_VOICE,
-    MAX_TOKENS,
-    REPETITION_PENALTY,
-    TEMPERATURE,
-    TOP_P,
-    VOICE_DESCRIPTIONS,
-)
+from .config import ModelConfig, OrpheusConfig, ServerConfig, TTSConfig
+from .const import AVAILABLE_VOICES, DEFAULT_VOICE, VOICE_DESCRIPTIONS
 from .handler import OrpheusEventHandler
 from .model_utils import DEFAULT_MODEL_FILENAME, DEFAULT_REPO_ID
 from .orpheus import list_available_voices
@@ -54,8 +46,8 @@ def get_voices() -> List[TtsVoice]:
     return voices
 
 
-async def main() -> None:
-    """Main entry point."""
+def setup_argument_parser() -> argparse.ArgumentParser:
+    """Set up the argument parser with all required arguments."""
     parser = argparse.ArgumentParser(description="Wyoming server for Orpheus TTS")
 
     # Model and system parameters
@@ -113,45 +105,35 @@ async def main() -> None:
     parser.add_argument(
         "--temperature",
         type=float,
-        default=TEMPERATURE,
         help="Sampling temperature (0-1)",
     )
     parser.add_argument(
         "--top-p",
         type=float,
-        default=TOP_P,
         help="Top-p sampling parameter (0-1)",
     )
     parser.add_argument(
         "--max-tokens",
         type=int,
-        default=MAX_TOKENS,
         help="Maximum tokens to generate",
     )
     parser.add_argument(
         "--repetition-penalty",
         type=float,
-        default=REPETITION_PENALTY,
         help="Repetition penalty (>=1.1 recommended)",
     )
     parser.add_argument(
         "--chunk-max-length",
         type=int,
-        default=CHUNK_LIMIT,
         help="Maximum length of text chunks for processing",
     )
-    parser.add_argument(
-        "--auto-punctuation", default=".?!", help="Automatically add punctuation"
-    )
+    parser.add_argument("--auto-punctuation", help="Automatically add punctuation")
 
     # Wyoming server parameters
-    parser.add_argument(
-        "--uri", default="stdio://", help="unix:// or tcp:// URI for Wyoming protocol"
-    )
+    parser.add_argument("--uri", help="unix:// or tcp:// URI for Wyoming protocol")
     parser.add_argument(
         "--samples-per-chunk",
         type=int,
-        default=1024,
         help="Number of audio samples per chunk",
     )
 
@@ -174,14 +156,27 @@ async def main() -> None:
         help="Print version and exit",
     )
 
+    return parser
+
+
+async def main() -> None:
+    """Main entry point."""
+    parser = setup_argument_parser()
     args = parser.parse_args()
 
+    # Set up initial logging
     logging.basicConfig(
         level=logging.DEBUG if args.debug else logging.INFO,
         format=args.log_format,
     )
 
-    _LOGGER.debug(args)
+    # Convert argparse namespace to Pydantic config
+    try:
+        config = OrpheusConfig.from_args(args)
+        _LOGGER.debug(f"Configuration: {config.dict()}")
+    except Exception as e:
+        _LOGGER.error(f"Error in configuration: {e}")
+        return
 
     # List voices and exit if requested
     if args.list_voices:
@@ -189,9 +184,9 @@ async def main() -> None:
         return
 
     # Verify model exists
-    if not args.model_path.exists() and args.no_download:
+    if not config.model.model_path.exists() and config.model.no_download:
         _LOGGER.error(
-            f"Model file not found: {args.model_path} and downloading is disabled"
+            f"Model file not found: {config.model.model_path} and downloading is disabled"
         )
         return
 
@@ -213,23 +208,24 @@ async def main() -> None:
         ],
     )
 
-    # Create model manager
-    model_manager = OrpheusModelManager(args)
+    # Create model manager with the config
+    model_manager = OrpheusModelManager(config.model)
 
     # Load model (but don't wait for it to complete)
     asyncio.create_task(model_manager.get_model())
 
     # Start server
-    server = AsyncServer.from_uri(args.uri)
-    _LOGGER.info(f"Starting Wyoming Orpheus server with model {args.model_path}")
+    server = AsyncServer.from_uri(config.server.uri)
+    _LOGGER.info(
+        f"Starting Wyoming Orpheus server with model {config.model.model_path}"
+    )
 
     # Run server
     await server.run(
         partial(
             OrpheusEventHandler,
             wyoming_info,
-            args,
-            model_manager,
+            config,
         )
     )
 

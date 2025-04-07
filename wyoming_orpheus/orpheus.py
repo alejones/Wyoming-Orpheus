@@ -3,7 +3,6 @@
 import logging
 import re
 import wave
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Generator, List, Optional
 
@@ -11,7 +10,6 @@ from .const import (
     AUDIO_END_TOKEN,
     AUDIO_START_TOKEN,
     AVAILABLE_VOICES,
-    CHUNK_LIMIT,
     DEFAULT_VOICE,
     EMOTION_TAGS,
     MAX_TOKENS,
@@ -23,18 +21,6 @@ from .const import (
 from .decoder import SnacDecoder
 
 _LOGGER = logging.getLogger(__name__)
-
-
-@dataclass
-class TTSConfig:
-    """Configuration for the TTS system."""
-
-    voice: str = DEFAULT_VOICE
-    temperature: float = TEMPERATURE
-    top_p: float = TOP_P
-    max_tokens: int = MAX_TOKENS
-    repetition_penalty: float = REPETITION_PENALTY
-    chunk_max_length: int = CHUNK_LIMIT
 
 
 def format_prompt(prompt: str, voice: str = DEFAULT_VOICE) -> str:
@@ -64,7 +50,7 @@ def format_prompt(prompt: str, voice: str = DEFAULT_VOICE) -> str:
     return f"{special_start}{formatted_prompt}{special_end}"
 
 
-def chunk_text(text: str, max_length: int = CHUNK_LIMIT) -> List[str]:
+def chunk_text(text: str, max_length: int) -> List[str]:
     """
     Split text into chunks based on sentence delimiters (., !, ?).
     Each chunk will be at most max_length characters.
@@ -156,7 +142,7 @@ def generate_speech_from_llama(
     top_p: float = TOP_P,
     max_tokens: int = MAX_TOKENS,
     repetition_penalty: float = REPETITION_PENALTY,
-    chunk_max_length: int = CHUNK_LIMIT,
+    chunk_max_length: int = 400,
 ) -> List[bytes]:
     """
     Generate speech from text using Orpheus model via llama.cpp.

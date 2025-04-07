@@ -12,6 +12,9 @@ numpy = "*"
 huggingface-hub = "*"
 
 [dev-packages]
+pytest-asyncio = "*"
+python-speech-features = "*"
+scipy = "*"
 
 [requires]
 python_version = "3.12"

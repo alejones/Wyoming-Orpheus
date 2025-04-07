@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wyoming_orpheus"
+description = "Wyoming protocol server for Orpheus-TTS"
+readme = "readme.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+dynamic = ["version"]
+dependencies = [
+    "wyoming",
+    "llama-cpp-python",
+    "numpy",
+    "huggingface-hub",
+    "snac",
+    "sounddevice",
+]
+
+[project.scripts]
+wyoming-orpheus = "wyoming_orpheus.__main__:run"
+
+[tool.setuptools.dynamic]
+version = {file = "wyoming_orpheus/VERSION"}
+
+[tool.setuptools.package-data]
+wyoming_orpheus = ["VERSION"]

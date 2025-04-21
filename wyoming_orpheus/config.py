@@ -1,7 +1,7 @@
 """Pydantic models for Wyoming Orpheus TTS configuration."""
 
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -157,6 +157,7 @@ class ServerConfig(BaseModel):
     )
 
     log_format: str = Field(
+        default="%(levelname)s: %(message)s",
         description="Format for log messages",
     )
 
@@ -179,38 +180,52 @@ class OrpheusConfig(BaseModel):
 
     @classmethod
     def from_args(cls, args):
-        """Create a configuration object from argparse namespace."""
+        """Create a configuration object from argparse namespace.
+
+        Uses default values from constants for any missing parameters.
+        """
         # Convert argparse namespace to dictionary
         args_dict = vars(args)
 
-        # Create configuration objects
+        # Helper function to safely get arguments with defaults
+        def get_arg(name: str, default: Any) -> Any:
+            value = args_dict.get(name)
+            return default if value is None else value
+
+        # Create TTS configuration with proper defaults
         tts_config = TTSConfig(
-            voice=args_dict.get("voice", DEFAULT_VOICE),
-            temperature=args_dict.get("temperature", TEMPERATURE),
-            top_p=args_dict.get("top_p", TOP_P),
-            max_tokens=args_dict.get("max_tokens", MAX_TOKENS),
-            repetition_penalty=args_dict.get("repetition_penalty", REPETITION_PENALTY),
-            chunk_max_length=args_dict.get("chunk_max_length", CHUNK_LIMIT),
+            voice=get_arg("voice", DEFAULT_VOICE),
+            temperature=get_arg("temperature", TEMPERATURE),
+            top_p=get_arg("top_p", TOP_P),
+            max_tokens=get_arg("max_tokens", MAX_TOKENS),
+            repetition_penalty=get_arg("repetition_penalty", REPETITION_PENALTY),
+            chunk_max_length=get_arg("chunk_max_length", CHUNK_LIMIT),
         )
 
+        # Extract required model parameters
+        model_path = args_dict.get("model_path")
+        repo_id = args_dict.get("repo_id")
+
+        # Create model configuration
         model_config = ModelConfig(
-            model_path=args_dict.get("model_path"),
-            repo_id=args_dict.get("repo_id"),
-            n_threads=args_dict.get("n_threads", 4),
-            n_ctx=args_dict.get("n_ctx", 2048),
-            verify_model=args_dict.get("verify_model", False),
+            model_path=model_path,
+            repo_id=repo_id,
+            n_threads=get_arg("n_threads", 4),
+            n_ctx=get_arg("n_ctx", 2048),
+            verify_model=get_arg("verify_model", False),
             model_cache_dir=args_dict.get("model_cache_dir"),
-            force_download=args_dict.get("force_download", False),
-            no_download=args_dict.get("no_download", False),
+            force_download=get_arg("force_download", False),
+            no_download=get_arg("no_download", False),
         )
 
+        # Create server configuration
         server_config = ServerConfig(
-            uri=args_dict.get("uri", "stdio://"),
-            samples_per_chunk=args_dict.get("samples_per_chunk", 1024),
+            uri=get_arg("uri", "stdio://"),
+            samples_per_chunk=get_arg("samples_per_chunk", 1024),
             sample_rate=SAMPLE_RATE,
-            debug=args_dict.get("debug", False),
-            log_format=args_dict.get("log_format", "%(levelname)s: %(message)s"),
-            auto_punctuation=args_dict.get("auto_punctuation", ".?!"),
+            debug=get_arg("debug", False),
+            log_format=get_arg("log_format", "%(levelname)s: %(message)s"),
+            auto_punctuation=get_arg("auto_punctuation", ".?!"),
         )
 
         return cls(
@@ -223,21 +238,18 @@ class OrpheusConfig(BaseModel):
         """Convert the configuration to a dictionary."""
         return self.model_dump()
 
-    def to_args(self) -> dict:
+    def to_args(self) -> dict[str, Any]:
         """Convert the configuration to a flat dictionary for argparse."""
         # Combine all configs into a single flat dictionary
         result = {}
 
         # Add TTS config
-        tts_dict = self.tts.dict()
-        result.update(tts_dict)
+        result.update(self.tts.model_dump())
 
         # Add model config
-        model_dict = self.model.dict()
-        result.update(model_dict)
+        result.update(self.model.model_dump())
 
         # Add server config
-        server_dict = self.server.dict()
-        result.update(server_dict)
+        result.update(self.server.model_dump())
 
         return result

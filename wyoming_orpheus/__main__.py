@@ -173,7 +173,7 @@ async def main() -> None:
     # Convert argparse namespace to Pydantic config
     try:
         config = OrpheusConfig.from_args(args)
-        _LOGGER.debug(f"Configuration: {config.dict()}")
+        _LOGGER.debug(f"Configuration: {config.model_dump()}")
     except Exception as e:
         _LOGGER.error(f"Error in configuration: {e}")
         return
@@ -208,19 +208,13 @@ async def main() -> None:
         ],
     )
 
-    # Create model manager with the config
-    model_manager = OrpheusModelManager(config.model)
-
-    # Load model (but don't wait for it to complete)
-    asyncio.create_task(model_manager.get_model())
-
     # Start server
     server = AsyncServer.from_uri(config.server.uri)
     _LOGGER.info(
         f"Starting Wyoming Orpheus server with model {config.model.model_path}"
     )
 
-    # Run server
+    # Run server with simplified handler factory
     await server.run(
         partial(
             OrpheusEventHandler,

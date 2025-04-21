@@ -96,7 +96,7 @@ class SnacDecoder:
 
     def convert_to_audio(self, multiframe: List[int], count: int) -> Optional[bytes]:
         """
-        Convert token frames to audio.
+        Convert token frames to audio with optimized tensor operations.
 
         Args:
             multiframe: List of token IDs
@@ -108,130 +108,38 @@ class SnacDecoder:
         if len(multiframe) < TOKENS_PER_FRAME:
             return None
 
-        # SNAC expects codes organized into three groups based on their position
-        # within the 7-token frame structure.
-        # codes_0: Token at index 0
-        # codes_1: Tokens at indices 1, 4
-        # codes_2: Tokens at indices 2, 3, 5, 6
-        codes_0 = torch.tensor([], device=self.device, dtype=torch.int32)
-        codes_1 = torch.tensor([], device=self.device, dtype=torch.int32)
-        codes_2 = torch.tensor([], device=self.device, dtype=torch.int32)
-
         num_frames = len(multiframe) // TOKENS_PER_FRAME
         frame = multiframe[: num_frames * TOKENS_PER_FRAME]
 
-        # TODO: This loop could potentially be replaced with more efficient
-        # tensor slicing and reshaping if the exact pattern is confirmed.
-        for j in range(num_frames):
-            i = TOKENS_PER_FRAME * j # Start index of the current frame
+        # Convert the frame list to a tensor
+        frame_tensor = torch.tensor(frame, device=self.device, dtype=torch.int32)
 
-            # Extract token 0 for codes_0
-            if codes_0.shape[0] == 0:
-                codes_0 = torch.tensor(
-                    [frame[i]], device=self.device, dtype=torch.int32
-                )
-            else:
-                codes_0 = torch.cat(
-                    [
-                        codes_0,
-                        torch.tensor([frame[i]], device=self.device, dtype=torch.int32),
-                    ]
-                )
+        # Reshape the tensor to [num_frames, TOKENS_PER_FRAME]
+        reshaped_frames = frame_tensor.reshape(num_frames, TOKENS_PER_FRAME)
 
-            # Extract tokens 1 and 4 for codes_1
-            if codes_1.shape[0] == 0:
-                codes_1 = torch.tensor(
-                    [frame[i + 1]], device=self.device, dtype=torch.int32
-                )
-                codes_1 = torch.cat(
-                    [
-                        codes_1,
-                        torch.tensor(
-                            [frame[i + 4]], device=self.device, dtype=torch.int32
-                        ),
-                    ]
-                )
-            else:
-                codes_1 = torch.cat(
-                    [
-                        codes_1,
-                        torch.tensor(
-                            [frame[i + 1]], device=self.device, dtype=torch.int32
-                        ),
-                    ]
-                )
-                codes_1 = torch.cat(
-                    [
-                        codes_1,
-                        torch.tensor(
-                            [frame[i + 4]], device=self.device, dtype=torch.int32
-                        ),
-                    ]
-                )
+        # Extract tokens according to their position patterns using indexing
+        # codes_0: Token at index 0 from each frame
+        codes_0 = reshaped_frames[:, 0]
 
-            # Extract tokens 2, 3, 5, 6 for codes_2
-            if codes_2.shape[0] == 0:
-                codes_2 = torch.tensor(
-                    [frame[i + 2]], device=self.device, dtype=torch.int32
-                )
-                codes_2 = torch.cat(
-                    [
-                        codes_2,
-                        torch.tensor(
-                            [frame[i + 3]], device=self.device, dtype=torch.int32
-                        ),
-                    ]
-                )
-                codes_2 = torch.cat(
-                    [
-                        codes_2,
-                        torch.tensor(
-                            [frame[i + 5]], device=self.device, dtype=torch.int32
-                        ),
-                    ]
-                )
-                codes_2 = torch.cat(
-                    [
-                        codes_2,
-                        torch.tensor(
-                            [frame[i + 6]], device=self.device, dtype=torch.int32
-                        ),
-                    ]
-                )
-            else:
-                codes_2 = torch.cat(
-                    [
-                        codes_2,
-                        torch.tensor(
-                            [frame[i + 2]], device=self.device, dtype=torch.int32
-                        ),
-                    ]
-                )
-                codes_2 = torch.cat(
-                    [
-                        codes_2,
-                        torch.tensor(
-                            [frame[i + 3]], device=self.device, dtype=torch.int32
-                        ),
-                    ]
-                )
-                codes_2 = torch.cat(
-                    [
-                        codes_2,
-                        torch.tensor(
-                            [frame[i + 5]], device=self.device, dtype=torch.int32
-                        ),
-                    ]
-                )
-                codes_2 = torch.cat(
-                    [
-                        codes_2,
-                        torch.tensor(
-                            [frame[i + 6]], device=self.device, dtype=torch.int32
-                        ),
-                    ]
-                )
+        # codes_1: Tokens at indices 1 and 4 from each frame
+        # Stack the columns and flatten to maintain the expected order
+        codes_1 = torch.stack(
+            [reshaped_frames[:, 1], reshaped_frames[:, 4]], dim=1
+        ).flatten()
 
+        # codes_2: Tokens at indices 2, 3, 5, 6 from each frame
+        # Stack the columns and flatten to maintain the expected order
+        codes_2 = torch.stack(
+            [
+                reshaped_frames[:, 2],
+                reshaped_frames[:, 3],
+                reshaped_frames[:, 5],
+                reshaped_frames[:, 6],
+            ],
+            dim=1,
+        ).flatten()
+
+        # Reshape for model consumption
         codes = [codes_0.unsqueeze(0), codes_1.unsqueeze(0), codes_2.unsqueeze(0)]
 
         # Check that all tokens are between 0 and SNAC_CODEBOOK_SIZE

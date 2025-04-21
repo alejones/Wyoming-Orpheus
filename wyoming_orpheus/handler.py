@@ -29,7 +29,6 @@ class OrpheusEventHandler(AsyncEventHandler):
         self,
         wyoming_info: Info,
         config: OrpheusConfig,
-        model_manager: OrpheusModelManager,
         *args,
         **kwargs,
     ) -> None:
@@ -38,7 +37,8 @@ class OrpheusEventHandler(AsyncEventHandler):
 
         self.config = config
         self.wyoming_info_event = wyoming_info.event()
-        self.model_manager = model_manager
+        # Create model manager directly in the handler
+        self.model_manager = OrpheusModelManager(config.model)
 
     async def handle_event(self, event: Event) -> bool:
         """Handle a Wyoming event."""

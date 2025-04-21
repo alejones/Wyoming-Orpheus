@@ -17,7 +17,7 @@ from wyoming.event import async_read_event, async_write_event  # type:ignore
 from wyoming.info import Describe, Info  # type:ignore
 from wyoming.tts import Synthesize, SynthesizeVoice  # type:ignore
 
-from tests.dtw import compute_optimal_path  # type:ignore
+from .dtw import compute_optimal_path  # type:ignore
 
 _DIR = Path(__file__).parent
 _LOCAL_DIR = _DIR.parent / "local"

@@ -153,6 +153,7 @@ class SnacDecoder:
             return None
 
         try:
+            assert self.model is not None, "SNAC model not initialized"
             with torch.inference_mode():
                 audio_hat = self.model.decode(codes)
 

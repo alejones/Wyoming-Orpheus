@@ -144,6 +144,13 @@ class OrpheusEventHandler(AsyncEventHandler):
             return False
 
         snac_decoder = self.model_manager.snac_decoder
+        if snac_decoder is None:
+            await self.write_event(
+                Error(
+                    text="SNAC decoder not initialized", code="ModelLoadError"
+                ).event()
+            )
+            return False
 
         # Create temporary directory for the WAV file
         with tempfile.TemporaryDirectory() as temp_dir:

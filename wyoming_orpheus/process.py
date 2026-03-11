@@ -9,6 +9,7 @@ from typing import Optional
 from llama_cpp import Llama
 
 from .config import ModelConfig
+from .decoder import SnacDecoder
 from .model_utils import ensure_model_exists, verify_model_file
 
 _LOGGER = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ class OrpheusModelManager:
         """Initialize the model manager with a Pydantic ModelConfig."""
         self.config = model_config
         self.model: Optional[Llama] = None
+        self.snac_decoder: Optional[SnacDecoder] = None
         self.model_path = model_config.model_path
         self.lock = asyncio.Lock()
         self.last_load_attempt = 0.0
@@ -82,6 +84,11 @@ class OrpheusModelManager:
                         **context_params,
                     )
                     _LOGGER.info("Model loaded successfully")
+
+                    if self.snac_decoder is None:
+                        _LOGGER.info("Initializing SNAC decoder...")
+                        self.snac_decoder = SnacDecoder()
+
                     self.load_failed = False
 
                 except Exception as e:

@@ -1,10 +1,12 @@
 """Event handler for Wyoming clients."""
 
+import asyncio
 import logging
 import math
 import tempfile
 import time
 import wave
+from functools import partial
 from pathlib import Path
 
 from wyoming.audio import AudioChunk, AudioStart, AudioStop  # type: ignore
@@ -15,7 +17,7 @@ from wyoming.server import AsyncEventHandler  # type: ignore
 from wyoming.tts import Synthesize  # type: ignore
 
 from .config import OrpheusConfig
-from .const import AVAILABLE_VOICES, DEFAULT_VOICE, SAMPLE_RATE
+from .const import AVAILABLE_VOICES, DEFAULT_VOICE
 from .orpheus import generate_speech_from_llama
 from .process import OrpheusModelManager
 
@@ -141,20 +143,28 @@ class OrpheusEventHandler(AsyncEventHandler):
             )
             return False
 
+        snac_decoder = self.model_manager.snac_decoder
+
         # Create temporary directory for the WAV file
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Generate speech
+            # Generate speech in a thread pool so the event loop stays responsive
             output_file = Path(temp_dir) / f"{voice_name}_{int(time.time())}.wav"
-            audio_segments = generate_speech_from_llama(
-                llama_model=model,
-                prompt=text,
-                voice=voice_name,
-                output_file=output_file,
-                temperature=self.config.tts.temperature,
-                top_p=self.config.tts.top_p,
-                max_tokens=self.config.tts.max_tokens,
-                repetition_penalty=self.config.tts.repetition_penalty,
-                chunk_max_length=self.config.tts.chunk_max_length,
+            loop = asyncio.get_event_loop()
+            audio_segments = await loop.run_in_executor(
+                None,
+                partial(
+                    generate_speech_from_llama,
+                    llama_model=model,
+                    snac_decoder=snac_decoder,
+                    prompt=text,
+                    voice=voice_name,
+                    output_file=output_file,
+                    temperature=self.config.tts.temperature,
+                    top_p=self.config.tts.top_p,
+                    max_tokens=self.config.tts.max_tokens,
+                    repetition_penalty=self.config.tts.repetition_penalty,
+                    chunk_max_length=self.config.tts.chunk_max_length,
+                ),
             )
 
             if not audio_segments:

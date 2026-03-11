@@ -15,7 +15,6 @@ _LOGGER = logging.getLogger(__name__)
 # Constants for token processing
 CUSTOM_TOKEN_PREFIX = "<custom_token_"
 CUSTOM_TOKEN_PREFIX_LEN = 14  # Length of "<custom_token_"
-SAMPLE_RATE = 24000  # SNAC model uses 24kHz
 
 # Audio processing constants
 TOKENS_PER_FRAME = 7  # Number of tokens that make up one audio frame

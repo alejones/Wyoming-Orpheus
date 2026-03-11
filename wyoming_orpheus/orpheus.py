@@ -2,6 +2,7 @@
 
 import logging
 import re
+import sys
 import wave
 from pathlib import Path
 from typing import Generator, List, Optional
@@ -133,8 +134,20 @@ def generate_tokens_from_llama(
     _LOGGER.debug("Token generation complete")
 
 
+def _write_wav(output_file: Path, segments: List[bytes]) -> None:
+    """Write audio segments to a WAV file."""
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(output_file), "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(SAMPLE_RATE)
+        for segment in segments:
+            wav_file.writeframes(segment)
+
+
 def generate_speech_from_llama(
     llama_model,
+    snac_decoder: SnacDecoder,
     prompt: str,
     voice: str = DEFAULT_VOICE,
     output_file: Optional[Path] = None,
@@ -149,6 +162,7 @@ def generate_speech_from_llama(
 
     Args:
         llama_model: The loaded llama.cpp model
+        snac_decoder: Shared SnacDecoder instance (must not be re-created per call)
         prompt: The text to convert to speech
         voice: The voice to use
         output_file: Path to output WAV file (optional)
@@ -161,9 +175,6 @@ def generate_speech_from_llama(
     Returns:
         List of audio segments as bytes
     """
-    # Initialize the SNAC decoder
-    snac_decoder = SnacDecoder()
-
     # If prompt is longer than chunk_max_length, split it into chunks
     if len(prompt) > chunk_max_length:
         chunks = chunk_text(prompt, chunk_max_length)
@@ -174,7 +185,6 @@ def generate_speech_from_llama(
         for i, chunk in enumerate(chunks):
             _LOGGER.debug(f"Processing chunk {i + 1}/{len(chunks)}: {chunk[:50]}...")
 
-            # Generate tokens and convert to audio
             token_gen = generate_tokens_from_llama(
                 llama_model=llama_model,
                 prompt=chunk,
@@ -185,19 +195,11 @@ def generate_speech_from_llama(
                 repetition_penalty=repetition_penalty,
             )
 
-            # Collect audio segments
             chunk_segments = list(snac_decoder.tokens_decoder_sync(token_gen))
             all_audio_segments.extend(chunk_segments)
 
-        # Write to WAV file if requested
         if output_file:
-            output_file.parent.mkdir(parents=True, exist_ok=True)
-            with wave.open(str(output_file), "wb") as wav_file:
-                wav_file.setnchannels(1)
-                wav_file.setsampwidth(2)
-                wav_file.setframerate(SAMPLE_RATE)
-                for segment in all_audio_segments:
-                    wav_file.writeframes(segment)
+            _write_wav(output_file, all_audio_segments)
 
         duration = (
             sum([len(segment) // (2 * 1) for segment in all_audio_segments])
@@ -208,7 +210,6 @@ def generate_speech_from_llama(
 
         return all_audio_segments
     else:
-        # Process single chunk
         token_gen = generate_tokens_from_llama(
             llama_model=llama_model,
             prompt=prompt,
@@ -219,29 +220,20 @@ def generate_speech_from_llama(
             repetition_penalty=repetition_penalty,
         )
 
-        # Convert tokens to audio
         audio_segments = list(snac_decoder.tokens_decoder_sync(token_gen))
 
-        # Write to WAV file if requested
         if output_file:
-            output_file.parent.mkdir(parents=True, exist_ok=True)
-            with wave.open(str(output_file), "wb") as wav_file:
-                wav_file.setnchannels(1)
-                wav_file.setsampwidth(2)
-                wav_file.setframerate(SAMPLE_RATE)
-                for segment in audio_segments:
-                    wav_file.writeframes(segment)
+            _write_wav(output_file, audio_segments)
 
         return audio_segments
 
 
 def list_available_voices() -> None:
     """List all available voices with the recommended one marked."""
-    _LOGGER.info("Available voices (in order of conversational realism):")
+    print("Available voices (in order of conversational realism):", file=sys.stdout)
     for voice in AVAILABLE_VOICES:
-        marker = "★" if voice == DEFAULT_VOICE else " "
-        _LOGGER.info(f"{marker} {voice}")
-    _LOGGER.info(f"\nDefault voice: {DEFAULT_VOICE}")
-
-    _LOGGER.info("\nAvailable emotion tags:")
-    _LOGGER.info(", ".join(sorted(EMOTION_TAGS)))
+        marker = "*" if voice == DEFAULT_VOICE else " "
+        print(f"{marker} {voice}", file=sys.stdout)
+    print(f"\nDefault voice: {DEFAULT_VOICE}", file=sys.stdout)
+    print("\nAvailable emotion tags:", file=sys.stdout)
+    print(", ".join(sorted(EMOTION_TAGS)), file=sys.stdout)

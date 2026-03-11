@@ -1,22 +1,21 @@
-# Stage 1: Build environment
-FROM nvcr.io/nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04 AS builder
+# Multi-stage build for Wyoming Orpheus TTS service with CUDA support.
+# Builder compiles dependencies; runtime copies only what is needed to keep image lean.
 
-# Set environment variables
+# Stage 1: Build environment
+FROM nvcr.io/nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04 AS builder
+
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV PATH="/usr/local/cuda/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
 ENV CMAKE_ARGS="-DGGML_CUDA=on -DLLAVA_BUILD=off -DCUDAToolkit_ROOT=/usr/local/cuda"
-ENV PYTHONPATH="/app:${PYTHONPATH}"
+ENV PYTHONPATH="/app"
 
-# Install system dependencies and Python 3.12 from deadsnakes PPA
+# Install build dependencies (python3.12 is default on Ubuntu 24.04)
 RUN apt-get update && apt-get install -y \
-    software-properties-common \
-    && add-apt-repository ppa:deadsnakes/ppa \
-    && apt-get update && apt-get install -y \
-    python3.12 \
-    python3.12-dev \
+    python3 \
     python3-pip \
+    python3-venv \
     build-essential \
     cmake \
     ninja-build \
@@ -26,56 +25,39 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Create symbolic links for python 3.12
-RUN ln -sf /usr/bin/python3.12 /usr/bin/python3 && \
-    ln -sf /usr/bin/python3.12 /usr/bin/python && \
-    ln -sf /usr/bin/pip3 /usr/bin/pip
-
 WORKDIR /app
 
-# Install pipenv
-RUN pip install --no-cache-dir pipenv
+# Install pipenv into the system Python
+RUN pip install --no-cache-dir pipenv --break-system-packages
 
-# Copy Pipfiles
+# Copy Pipfiles and install dependencies into system site-packages
 COPY Pipfile* ./
-
-# Install dependencies using pipenv (without creating a virtualenv inside the container)
 RUN pipenv install --deploy --system
 
-# Install llama-cpp-python with CUDA support
-ENV CMAKE_ARGS="-G Ninja . -DGGML_CUDA=on -DLLAVA_BUILD=off -DCUDAToolkit_ROOT=/usr/local/cuda -DCMAKE_MAKE_PROGRAM=/usr/bin/ninja-build"
-
-# Copy the application code 
+# Copy the application code
 COPY wyoming_orpheus/ ./wyoming_orpheus/
 
 # Stage 2: Runtime environment
-FROM nvcr.io/nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+FROM nvcr.io/nvidia/cuda:12.8.1-cudnn-runtime-ubuntu24.04
 
-# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
-ENV PYTHONPATH="/app:${PYTHONPATH}"
+ENV PYTHONPATH="/app"
 
-# Install runtime dependencies and Python 3.12
+# Install runtime dependencies only
 RUN apt-get update && apt-get install -y \
-    software-properties-common \
-    && add-apt-repository ppa:deadsnakes/ppa \
-    && apt-get update && apt-get install -y \
-    python3.12 \
-    python3-pip \
+    python3 \
     libsndfile1 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Create symbolic links for python 3.12
-RUN ln -sf /usr/bin/python3.12 /usr/bin/python3 && \
-    ln -sf /usr/bin/python3.12 /usr/bin/python && \
-    ln -sf /usr/bin/pip3 /usr/bin/pip
-
 WORKDIR /app
 
-# Copy installed Python packages and application from builder stage
-COPY --from=builder /usr/local/lib/python3.12/dist-packages /usr/local/lib/python3.12/dist-packages
+# Copy installed Python packages and application from builder
+COPY --from=builder /usr/lib/python3 /usr/lib/python3
+COPY --from=builder /usr/local/lib/python3.12 /usr/local/lib/python3.12
+COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /app /app
 
 # Create directory for model caching
@@ -87,17 +69,9 @@ ENV VOICE="tara"
 ENV N_THREADS=4
 ENV PORT=10200
 
-# Expose the port
 EXPOSE 10200
 
-# Create an entrypoint script
-RUN echo '#!/bin/bash\n\
-python -m wyoming_orpheus \
-  --uri "tcp://0.0.0.0:$PORT" \
-  --voice "$VOICE" \
-  --n-threads "$N_THREADS" \
-  --model-path "$MODEL_PATH" \
-  --model-cache-dir /models \
-  "$@"' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+# Write entrypoint script
+RUN printf '#!/bin/bash\npython3 -m wyoming_orpheus \\\n  --uri "tcp://0.0.0.0:$PORT" \\\n  --voice "$VOICE" \\\n  --n-threads "$N_THREADS" \\\n  --model-path "$MODEL_PATH" \\\n  --model-cache-dir /models \\\n  "$@"\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 ENTRYPOINT ["/app/entrypoint.sh"]

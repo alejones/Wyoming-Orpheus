@@ -32,7 +32,7 @@ RUN pip install --break-system-packages pipenv
 
 # Copy Pipfiles and install dependencies into system site-packages
 COPY Pipfile* ./
-RUN pipenv install --deploy --system
+RUN PIP_BREAK_SYSTEM_PACKAGES=1 pipenv install --deploy --system
 
 # Copy the application code
 COPY wyoming_orpheus/ ./wyoming_orpheus/

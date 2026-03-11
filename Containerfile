@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Install pipenv into the system Python
-RUN pip install --user pipenv
+RUN pip install --break-system-packages --user pipenv 
 
 # Copy Pipfiles and install dependencies into system site-packages
 COPY Pipfile* ./

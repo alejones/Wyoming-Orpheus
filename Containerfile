@@ -16,7 +16,6 @@ RUN apt-get update && apt-get install -y \
     && apt-get update && apt-get install -y \
     python3.12 \
     python3.12-dev \
-    python3.12-distutils \
     python3-pip \
     build-essential \
     cmake \
@@ -63,7 +62,6 @@ RUN apt-get update && apt-get install -y \
     && add-apt-repository ppa:deadsnakes/ppa \
     && apt-get update && apt-get install -y \
     python3.12 \
-    python3.12-distutils \
     python3-pip \
     libsndfile1 \
     && apt-get clean \

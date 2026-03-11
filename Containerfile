@@ -9,11 +9,15 @@ ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
 ENV CMAKE_ARGS="-DGGML_CUDA=on -DLLAVA_BUILD=off -DCUDAToolkit_ROOT=/usr/local/cuda"
 ENV PYTHONPATH="/app:${PYTHONPATH}"
 
-# Install system dependencies
+# Install system dependencies and Python 3.12 from deadsnakes PPA
 RUN apt-get update && apt-get install -y \
-    python3 \
+    software-properties-common \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y \
+    python3.12 \
+    python3.12-dev \
+    python3.12-distutils \
     python3-pip \
-    python3-dev \
     build-essential \
     cmake \
     ninja-build \
@@ -23,8 +27,9 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Create symbolic links for python
-RUN ln -sf /usr/bin/python3 /usr/bin/python && \
+# Create symbolic links for python 3.12
+RUN ln -sf /usr/bin/python3.12 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3.12 /usr/bin/python && \
     ln -sf /usr/bin/pip3 /usr/bin/pip
 
 WORKDIR /app
@@ -52,22 +57,27 @@ ENV PYTHONUNBUFFERED=1
 ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
 ENV PYTHONPATH="/app:${PYTHONPATH}"
 
-# Install only the necessary runtime dependencies
+# Install runtime dependencies and Python 3.12
 RUN apt-get update && apt-get install -y \
-    python3 \
+    software-properties-common \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y \
+    python3.12 \
+    python3.12-distutils \
     python3-pip \
     libsndfile1 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Create symbolic links for python
-RUN ln -sf /usr/bin/python3 /usr/bin/python && \
+# Create symbolic links for python 3.12
+RUN ln -sf /usr/bin/python3.12 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3.12 /usr/bin/python && \
     ln -sf /usr/bin/pip3 /usr/bin/pip
 
 WORKDIR /app
 
 # Copy installed Python packages and application from builder stage
-COPY --from=builder /usr/local/lib/python3.10/dist-packages /usr/local/lib/python3.10/dist-packages
+COPY --from=builder /usr/local/lib/python3.12/dist-packages /usr/local/lib/python3.12/dist-packages
 COPY --from=builder /app /app
 
 # Create directory for model caching

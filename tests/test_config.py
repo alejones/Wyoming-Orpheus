@@ -105,7 +105,7 @@ def test_orpheus_config():
     assert config.server.uri == "tcp://localhost:10200"
 
     # Convert to dict
-    config_dict = config.dict()
+    config_dict = config.model_dump()
     assert config_dict["tts"]["voice"] == "zoe"
     assert config_dict["model"]["repo_id"] == "user/repo"
 
@@ -122,10 +122,10 @@ def test_config_serialization():
     )
 
     # Serialize to JSON
-    config_json = config.json()
+    config_json = config.model_dump_json()
 
     # Deserialize from JSON
-    config2 = OrpheusConfig.parse_raw(config_json)
+    config2 = OrpheusConfig.model_validate_json(config_json)
 
     # Check equality
     assert config.tts.voice == config2.tts.voice
@@ -143,7 +143,7 @@ def test_config_serialization():
             config_data = json.load(f)
 
         # Parse as config
-        config3 = OrpheusConfig.parse_obj(config_data)
+        config3 = OrpheusConfig.model_validate(config_data)
 
         # Check equality
         assert config.tts.voice == config3.tts.voice

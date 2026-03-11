@@ -1,3 +1,5 @@
+"""Utility script to download the Orpheus model and print its SHA-256 hash."""
+
 import hashlib
 
 from huggingface_hub import hf_hub_download
@@ -8,9 +10,13 @@ model_path = hf_hub_download(
     filename="orpheus-3b-0.1-ft-q4_k_m.gguf",
 )
 
-# Calculate the SHA-256 hash
+# Calculate the SHA-256 hash using chunked reads to avoid loading the entire
+# 2.4 GB file into memory at once.
+hasher = hashlib.sha256()
 with open(model_path, "rb") as f:
-    file_hash = hashlib.sha256(f.read()).hexdigest()
+    for chunk in iter(lambda: f.read(65536), b""):
+        hasher.update(chunk)
+file_hash = hasher.hexdigest()
 
 print(f"Calculated hash: {file_hash}")
 print(

@@ -207,9 +207,10 @@ async def test_orpheus() -> None:
         dtw_distance = compute_optimal_path(actual_mfcc, expected_mfcc)
         print(f"DTW distance between reference and generated audio: {dtw_distance}")
 
-        # The acceptable threshold depends on your specific use case and quality requirements
-        # You may need to adjust this based on empirical testing
-        max_acceptable_distance = 15
+        # Threshold is length-normalized (divided by m+n in dtw.py), so it remains
+        # stable regardless of prompt duration. TBD: calibrate empirically once the
+        # reference audio has been regenerated with the current model.
+        max_acceptable_distance = 0.05
         assert dtw_distance < max_acceptable_distance, (
             f"Audio differs too much from reference (DTW distance: {dtw_distance}, "
             f"max acceptable: {max_acceptable_distance})"

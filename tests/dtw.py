@@ -32,5 +32,8 @@ def compute_optimal_path(x: np.ndarray, y: np.ndarray) -> float:
                 cost_matrix[row][col - 1],  # deletion
                 cost_matrix[row - 1][col - 1],  # match
             )
-    distance = cost_matrix[m - 1][n - 1]
+    # Normalize by path length so the distance is independent of audio duration.
+    # Without normalization a longer audio clip mechanically produces a higher
+    # raw cost even if the audio quality is identical.
+    distance = cost_matrix[m - 1][n - 1] / (m + n)
     return distance

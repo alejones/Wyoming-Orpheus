@@ -12,12 +12,11 @@ from wyoming.info import Attribution, Info, TtsProgram, TtsVoice  # type: ignore
 from wyoming.server import AsyncServer  # type: ignore
 
 from . import __version__
-from .config import ModelConfig, OrpheusConfig, ServerConfig, TTSConfig
+from .config import OrpheusConfig
 from .const import AVAILABLE_VOICES, DEFAULT_VOICE, VOICE_DESCRIPTIONS
 from .handler import OrpheusEventHandler
 from .model_utils import DEFAULT_MODEL_FILENAME, DEFAULT_REPO_ID
 from .orpheus import list_available_voices
-from .process import OrpheusModelManager
 
 _LOGGER = logging.getLogger(__name__)
 

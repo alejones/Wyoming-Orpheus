@@ -55,6 +55,7 @@ VOICE_DESCRIPTIONS: Final[Dict[str, str]] = {
 # Model settings
 DEFAULT_THREADS: Final = 4  # Default number of threads for model inference
 DEFAULT_CONTEXT_SIZE: Final = 2048  # Default context size in tokens
+DEFAULT_SAMPLES_PER_CHUNK: Final = 1024  # Default audio samples per Wyoming chunk
 
 # Special prompt tokens
 AUDIO_START_TOKEN: Final = "<|audio|>"

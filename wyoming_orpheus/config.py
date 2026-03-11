@@ -9,6 +9,9 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from .const import (
     AVAILABLE_VOICES,
     CHUNK_LIMIT,
+    DEFAULT_CONTEXT_SIZE,
+    DEFAULT_SAMPLES_PER_CHUNK,
+    DEFAULT_THREADS,
     DEFAULT_VOICE,
     MAX_TOKENS,
     REPETITION_PENALTY,
@@ -89,13 +92,13 @@ class ModelConfig(BaseModel):
     )
 
     n_threads: int = Field(
-        default=4,
+        default=DEFAULT_THREADS,
         gt=0,
         description="Number of threads to use for model inference",
     )
 
     n_ctx: int = Field(
-        default=2048,
+        default=DEFAULT_CONTEXT_SIZE,
         gt=0,
         description="Context size in tokens",
     )
@@ -141,7 +144,7 @@ class ServerConfig(BaseModel):
     )
 
     samples_per_chunk: int = Field(
-        default=1024,
+        default=DEFAULT_SAMPLES_PER_CHUNK,
         gt=0,
         description="Number of audio samples per chunk",
     )
@@ -210,8 +213,8 @@ class OrpheusConfig(BaseModel):
         model_config = ModelConfig(
             model_path=model_path,
             repo_id=repo_id,
-            n_threads=get_arg("n_threads", 4),
-            n_ctx=get_arg("n_ctx", 2048),
+            n_threads=get_arg("n_threads", DEFAULT_THREADS),
+            n_ctx=get_arg("n_ctx", DEFAULT_CONTEXT_SIZE),
             verify_model=get_arg("verify_model", False),
             model_cache_dir=args_dict.get("model_cache_dir"),
             force_download=get_arg("force_download", False),
@@ -221,7 +224,7 @@ class OrpheusConfig(BaseModel):
         # Create server configuration
         server_config = ServerConfig(
             uri=get_arg("uri", "stdio://"),
-            samples_per_chunk=get_arg("samples_per_chunk", 1024),
+            samples_per_chunk=get_arg("samples_per_chunk", DEFAULT_SAMPLES_PER_CHUNK),
             sample_rate=SAMPLE_RATE,
             debug=get_arg("debug", False),
             log_format=get_arg("log_format", "%(levelname)s: %(message)s"),
@@ -237,19 +240,3 @@ class OrpheusConfig(BaseModel):
     def to_dict(self) -> dict:
         """Convert the configuration to a dictionary."""
         return self.model_dump()
-
-    def to_args(self) -> dict[str, Any]:
-        """Convert the configuration to a flat dictionary for argparse."""
-        # Combine all configs into a single flat dictionary
-        result = {}
-
-        # Add TTS config
-        result.update(self.tts.model_dump())
-
-        # Add model config
-        result.update(self.model.model_dump())
-
-        # Add server config
-        result.update(self.server.model_dump())
-
-        return result

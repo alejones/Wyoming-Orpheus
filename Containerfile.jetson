@@ -9,7 +9,7 @@
 # before building; NVIDIA may publish newer minor versions.
 
 # Stage 1: Build environment
-FROM nvcr.io/nvidia/l4t-cuda:12.6.11-devel-ubuntu22.04 AS builder
+FROM nvcr.io/nvidia/l4t-cuda:12.6.11-runtime AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1

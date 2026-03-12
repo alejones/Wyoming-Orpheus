@@ -1,5 +1,5 @@
 # Multi-stage build for Wyoming Orpheus TTS on NVIDIA Jetson (ARM64/aarch64).
-# Uses L4T (Linux for Tegra) base images from JetPack 6.x with CUDA 12.6.
+# Uses L4T (Linux for Tegra) base images from JetPack 6.x with CUDA 12.2.
 # Builder compiles llama-cpp-python with CUDA; runtime copies only what is needed.
 #
 # Target hardware: Jetson Orin (AGX, NX, Nano), Xavier series
@@ -18,28 +18,49 @@ ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
 ENV CMAKE_ARGS="-DGGML_CUDA=on -DLLAVA_BUILD=off -DCUDAToolkit_ROOT=/usr/local/cuda"
 ENV PYTHONPATH="/app"
 
-# Install build dependencies (Ubuntu 22.04 provides Python 3.10 by default)
+# pyenv root and shims on PATH so all subsequent RUN steps use pyenv Python
+ENV PYENV_ROOT="/root/.pyenv"
+ENV PATH="${PYENV_ROOT}/shims:${PYENV_ROOT}/bin:${PATH}"
+ENV PYTHON_VERSION="3.12"
+
+# Install build dependencies for llama-cpp-python and pyenv
 RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    python3-venv \
     build-essential \
     cmake \
     ninja-build \
     gcc \
     g++ \
     git \
+    curl \
+    libssl-dev \
+    libffi-dev \
+    libbz2-dev \
+    libreadline-dev \
+    libsqlite3-dev \
+    libncursesw5-dev \
+    xz-utils \
+    tk-dev \
+    libxml2-dev \
+    libxmlsec1-dev \
+    liblzma-dev \
+    zlib1g-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# Install pyenv and Python 3.12
+RUN curl https://pyenv.run | bash \
+    && pyenv install ${PYTHON_VERSION} \
+    && pyenv global ${PYTHON_VERSION} \
+    && pyenv rehash
+
 WORKDIR /app
 
-# Install pipenv into the system Python
-RUN pip install pipenv
+# Install pipenv into pyenv's Python
+RUN pip install --break-system-packages pipenv
 
-# Copy Pipfiles and install dependencies into system site-packages
+# Copy Pipfiles and install dependencies into pyenv's system site-packages
 COPY Pipfile* ./
-RUN pipenv install --deploy --system
+RUN PIP_BREAK_SYSTEM_PACKAGES=1 pipenv install --deploy --system
 
 # Copy the application code
 COPY wyoming_orpheus/ ./wyoming_orpheus/
@@ -52,21 +73,24 @@ ENV PYTHONUNBUFFERED=1
 ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
 ENV PYTHONPATH="/app"
 
+# pyenv Python takes precedence over the system Python 3.10
+ENV PYENV_ROOT="/root/.pyenv"
+ENV PATH="${PYENV_ROOT}/shims:${PYENV_ROOT}/bin:${PATH}"
+
 # Install runtime dependencies only
 RUN apt-get update && apt-get install -y \
-    python3 \
     libsndfile1 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy installed Python packages and application from builder
-# Ubuntu 22.04 uses python3.10 instead of python3.12
-COPY --from=builder /usr/lib/python3 /usr/lib/python3
-COPY --from=builder /usr/local/lib/python3.10 /usr/local/lib/python3.10
-COPY --from=builder /usr/local/bin /usr/local/bin
+# Copy pyenv Python installation and application from builder
+COPY --from=builder /root/.pyenv /root/.pyenv
 COPY --from=builder /app /app
+
+# Rehash shims so pyenv resolves python3 correctly in the runtime stage
+RUN pyenv rehash
 
 # Create directory for model caching
 RUN mkdir -p /models

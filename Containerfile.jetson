@@ -8,8 +8,8 @@
 # Verify these base image tags against https://catalog.ngc.nvidia.com/orgs/nvidia/containers/l4t-cuda
 # before building; NVIDIA may publish newer minor versions.
 
-# Stage 1: Build environment
-FROM nvcr.io/nvidia/l4t-cuda:12.6.11-runtime AS builder
+# Stage 1: Build environment (devel image required for CUDA headers and nvcc)
+FROM nvcr.io/nvidia/l4t-cuda:12.2.12-devel AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
@@ -35,17 +35,17 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Install pipenv into the system Python
-RUN pip install --break-system-packages pipenv
+RUN pip install pipenv
 
 # Copy Pipfiles and install dependencies into system site-packages
 COPY Pipfile* ./
-RUN PIP_BREAK_SYSTEM_PACKAGES=1 pipenv install --deploy --system
+RUN pipenv install --deploy --system
 
 # Copy the application code
 COPY wyoming_orpheus/ ./wyoming_orpheus/
 
 # Stage 2: Runtime environment
-FROM nvcr.io/nvidia/l4t-cuda:12.6.11-runtime
+FROM nvcr.io/nvidia/l4t-cuda:12.2.12-runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1

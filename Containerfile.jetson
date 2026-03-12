@@ -45,7 +45,7 @@ RUN PIP_BREAK_SYSTEM_PACKAGES=1 pipenv install --deploy --system
 COPY wyoming_orpheus/ ./wyoming_orpheus/
 
 # Stage 2: Runtime environment
-FROM nvcr.io/nvidia/l4t-cuda:12.6.11-runtime-ubuntu22.04
+FROM nvcr.io/nvidia/l4t-cuda:12.6.11-runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1

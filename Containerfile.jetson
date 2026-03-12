@@ -5,8 +5,7 @@
 # Target hardware: Jetson Orin (AGX, NX, Nano), Xavier series
 # Requires JetPack 6.x installed on the host device.
 #
-# Verify these base image tags against https://catalog.ngc.nvidia.com/orgs/nvidia/containers/l4t-cuda
-# before building; NVIDIA may publish newer minor versions.
+# Base image tags available at  https://catalog.ngc.nvidia.com/orgs/nvidia/containers/l4t-cuda
 
 # Stage 1: Build environment (devel image required for CUDA headers and nvcc)
 FROM nvcr.io/nvidia/l4t-cuda:12.2.12-devel AS builder
@@ -47,7 +46,7 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pyenv and Python 3.12
+# Install pyenv and Python
 RUN curl https://pyenv.run | bash \
     && pyenv install ${PYTHON_VERSION} \
     && pyenv global ${PYTHON_VERSION} \
@@ -55,10 +54,8 @@ RUN curl https://pyenv.run | bash \
 
 WORKDIR /app
 
-# Install pipenv into pyenv's Python
 RUN pip install --break-system-packages pipenv
 
-# Copy Pipfiles and install dependencies into pyenv's system site-packages
 COPY Pipfile* ./
 RUN PIP_BREAK_SYSTEM_PACKAGES=1 pipenv install --deploy --system
 
@@ -73,7 +70,7 @@ ENV PYTHONUNBUFFERED=1
 ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
 ENV PYTHONPATH="/app"
 
-# pyenv Python takes precedence over the system Python 3.10
+# pyenv Python takes precedence over the system Python
 ENV PYENV_ROOT="/root/.pyenv"
 ENV PATH="${PYENV_ROOT}/shims:${PYENV_ROOT}/bin:${PATH}"
 
@@ -96,7 +93,7 @@ RUN pyenv rehash
 RUN mkdir -p /models
 
 # Default model parameters (GPU layers enabled by default for Jetson)
-ENV MODEL_PATH="orpheus-3b-0.1-ft-q4_K_M.gguf"
+ENV MODEL_PATH="orpheus-3b-0.1-ft-Q4_K_M.gguf"
 ENV VOICE="tara"
 ENV N_THREADS=4
 ENV N_GPU_LAYERS=-1

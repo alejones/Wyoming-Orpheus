@@ -267,6 +267,14 @@ async def main() -> None:
     # loaded weights rather than each connection loading its own copy.
     model_manager = OrpheusModelManager(config.model)
 
+    # Eagerly download and load the model at startup so the container is ready
+    # to serve requests immediately and download failures surface early.
+    _LOGGER.info("Loading model at startup...")
+    model = await model_manager.get_model()
+    if model is None:
+        _LOGGER.error("Failed to load model at startup, exiting")
+        return
+
     # Start server
     server = AsyncServer.from_uri(config.server.uri)
     _LOGGER.info(

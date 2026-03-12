@@ -173,6 +173,8 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 .aider*
-local/orpheus-3b-0.1-ft-q4_k_m.gguf
+local/*.gguf
 tests/orpheus_output.wav
 docs/
+tests/orpheus_output_nonstreaming.wav
+tests/orpheus_output_streaming.wav

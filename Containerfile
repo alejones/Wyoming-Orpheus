@@ -64,7 +64,7 @@ COPY --from=builder /app /app
 RUN mkdir -p /models
 
 # Default model parameters
-ENV MODEL_PATH="orpheus-3b-0.1-ft-q4_K_M.gguf"
+ENV MODEL_PATH="orpheus-3b-0.1-ft-Q4_K_M.gguf"
 ENV VOICE="tara"
 ENV N_THREADS=4
 ENV N_GPU_LAYERS=0

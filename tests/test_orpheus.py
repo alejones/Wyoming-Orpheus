@@ -29,9 +29,9 @@ from .dtw import compute_optimal_path  # type:ignore
 
 _DIR = Path(__file__).parent
 _LOCAL_DIR = _DIR.parent / "local"
-_MODEL_REPO_ID = "isaiahbjork/orpheus-3b-0.1-ft-Q4_K_M-GGUF"
-_MODEL_FILENAME = "orpheus-3b-0.1-ft-q4_k_m.gguf"
-_EXPECTED_HASH = "18284d3efd9831d0a8409f5f5877c84bff69009df7c3db818e904dccea6b6c55"
+_MODEL_REPO_ID = "unsloth/orpheus-3b-0.1-ft-GGUF"
+_MODEL_FILENAME = "orpheus-3b-0.1-ft-Q4_K_M.gguf"
+_EXPECTED_HASH = ""  # run tests/get_hash.py after first download to populate
 # Generous per-event timeout; first audio chunk arrives as soon as SNAC decodes
 # the initial token batch, well before full synthesis completes.
 _TIMEOUT = 120
@@ -46,6 +46,9 @@ def download_orpheus_model() -> Optional[Path]:
     model_path = _LOCAL_DIR / _MODEL_FILENAME
 
     if model_path.exists():
+        if not _EXPECTED_HASH:
+            print(f"Model already exists at {model_path} (hash verification skipped)")
+            return model_path
         sha256_hash = hashlib.sha256()
         with open(model_path, "rb") as f:
             for byte_block in iter(lambda: f.read(4096), b""):

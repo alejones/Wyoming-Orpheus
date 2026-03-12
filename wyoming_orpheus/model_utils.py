@@ -14,12 +14,10 @@ from huggingface_hub.utils import (  # type: ignore
 _LOGGER = logging.getLogger(__name__)
 
 # Default Hugging Face repository and model information
-DEFAULT_REPO_ID = "isaiahbjork/orpheus-3b-0.1-ft-Q4_K_M-GGUF"
-DEFAULT_MODEL_FILENAME = "orpheus-3b-0.1-ft-q4_k_m.gguf"
+DEFAULT_REPO_ID = "unsloth/orpheus-3b-0.1-ft-GGUF"
+DEFAULT_MODEL_FILENAME = "orpheus-3b-0.1-ft-Q4_K_M.gguf"
 
-MODEL_HASHES: Dict[str, str] = {
-    "orpheus-3b-0.1-ft-q4_k_m.gguf": "18284d3efd9831d0a8409f5f5877c84bff69009df7c3db818e904dccea6b6c55",
-}
+MODEL_HASHES: Dict[str, str] = {}
 
 
 def get_file_hash(

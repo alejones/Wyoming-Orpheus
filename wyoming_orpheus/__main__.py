@@ -12,11 +12,23 @@ from wyoming.info import Attribution, Info, TtsProgram, TtsVoice  # type: ignore
 from wyoming.server import AsyncServer  # type: ignore
 
 from . import __version__
-from .config import OrpheusConfig
-from .const import AVAILABLE_VOICES, DEFAULT_VOICE, VOICE_DESCRIPTIONS
+from .config import ModelConfig, OrpheusConfig, ServerConfig, TTSConfig
+from .const import (
+    AVAILABLE_VOICES,
+    CHUNK_LIMIT,
+    DEFAULT_SAMPLES_PER_CHUNK,
+    DEFAULT_VOICE,
+    MAX_TOKENS,
+    REPETITION_PENALTY,
+    SAMPLE_RATE,
+    TEMPERATURE,
+    TOP_P,
+    VOICE_DESCRIPTIONS,
+)
 from .handler import OrpheusEventHandler
 from .model_utils import DEFAULT_MODEL_FILENAME, DEFAULT_REPO_ID
 from .orpheus import list_available_voices
+from .process import OrpheusModelManager
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -90,6 +102,12 @@ def setup_argument_parser() -> argparse.ArgumentParser:
         help="Context size in tokens (default: 2048)",
     )
     parser.add_argument(
+        "--n-gpu-layers",
+        type=int,
+        default=0,
+        help="Number of model layers to offload to GPU (default: 0, CPU only)",
+    )
+    parser.add_argument(
         "--verify-model",
         action="store_true",
         help="Verify model file hash before loading",
@@ -158,6 +176,43 @@ def setup_argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _build_config(args: argparse.Namespace) -> OrpheusConfig:
+    """Build OrpheusConfig from a parsed argparse namespace."""
+
+    def _get(name: str, default):
+        value = getattr(args, name, None)
+        return default if value is None else value
+
+    tts_config = TTSConfig(
+        voice=_get("voice", DEFAULT_VOICE),
+        temperature=_get("temperature", TEMPERATURE),
+        top_p=_get("top_p", TOP_P),
+        max_tokens=_get("max_tokens", MAX_TOKENS),
+        repetition_penalty=_get("repetition_penalty", REPETITION_PENALTY),
+        chunk_max_length=_get("chunk_max_length", CHUNK_LIMIT),
+    )
+    model_config = ModelConfig(
+        model_path=args.model_path,
+        repo_id=args.repo_id,
+        n_threads=_get("n_threads", 4),
+        n_ctx=_get("n_ctx", 2048),
+        n_gpu_layers=_get("n_gpu_layers", 0),
+        verify_model=_get("verify_model", False),
+        model_cache_dir=getattr(args, "model_cache_dir", None),
+        force_download=_get("force_download", False),
+        no_download=_get("no_download", False),
+    )
+    server_config = ServerConfig(
+        uri=_get("uri", "tcp://0.0.0.0:10200"),
+        samples_per_chunk=_get("samples_per_chunk", DEFAULT_SAMPLES_PER_CHUNK),
+        sample_rate=SAMPLE_RATE,
+        debug=_get("debug", False),
+        log_format=_get("log_format", "%(levelname)s: %(message)s"),
+        auto_punctuation=_get("auto_punctuation", ".?!"),
+    )
+    return OrpheusConfig(tts=tts_config, model=model_config, server=server_config)
+
+
 async def main() -> None:
     """Main entry point."""
     parser = setup_argument_parser()
@@ -169,9 +224,9 @@ async def main() -> None:
         format=args.log_format,
     )
 
-    # Convert argparse namespace to Pydantic config
+    # Build Pydantic config from CLI args
     try:
-        config = OrpheusConfig.from_args(args)
+        config = _build_config(args)
         _LOGGER.debug(f"Configuration: {config.model_dump()}")
     except Exception as e:
         _LOGGER.error(f"Error in configuration: {e}")
@@ -203,9 +258,14 @@ async def main() -> None:
                 installed=True,
                 voices=sorted(voices, key=lambda v: v.name),
                 version=__version__,
+                supports_synthesize_streaming=True,
             )
         ],
     )
+
+    # Create a single shared model manager so all connections reuse the same
+    # loaded weights rather than each connection loading its own copy.
+    model_manager = OrpheusModelManager(config.model)
 
     # Start server
     server = AsyncServer.from_uri(config.server.uri)
@@ -213,12 +273,12 @@ async def main() -> None:
         f"Starting Wyoming Orpheus server with model {config.model.model_path}"
     )
 
-    # Run server with simplified handler factory
     await server.run(
         partial(
             OrpheusEventHandler,
             wyoming_info,
             config,
+            model_manager,
         )
     )
 

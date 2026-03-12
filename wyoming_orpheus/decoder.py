@@ -1,9 +1,6 @@
 """Decoder for Orpheus-TTS."""
 
-import asyncio
 import logging
-import queue
-import threading
 from typing import AsyncGenerator, Generator, List, Optional
 
 import numpy as np
@@ -22,9 +19,15 @@ TOKEN_OFFSET = 10  # Offset used in token ID calculation
 PROCESSING_BUFFER_SIZE = 28  # Buffer size for processing (4 * TOKENS_PER_FRAME)
 MIN_TOKENS_FOR_PROCESSING = 27  # Minimum number of tokens needed before processing
 
-# SNAC model constants
-SNAC_OUTPUT_SLICE_START = 2048  # Start index for audio output slice
-SNAC_OUTPUT_SLICE_END = 4096  # End index for audio output slice
+# SNAC model constants.
+# SNAC.decode() returns audio of shape [batch, 1, samples].  The first 2048
+# and the last samples beyond 4096 of each decoded batch contain startup/
+# windowing artefacts from the SNAC convolutional decoder.  Only the 2048
+# samples in [2048:4096] are clean output.  These values are tied to the
+# hubertsiuzdak/snac_24khz checkpoint; changing the checkpoint may require
+# re-calibrating these indices.
+SNAC_OUTPUT_SLICE_START = 2048
+SNAC_OUTPUT_SLICE_END = 4096
 SNAC_CODEBOOK_SIZE = 4096  # Maximum token value in codebook
 
 
@@ -201,7 +204,7 @@ class SnacDecoder:
         self, syn_token_gen: Generator[str, None, None]
     ) -> Generator[bytes, None, None]:
         """
-        Synchronous wrapper for the asynchronous token decoder.
+        Synchronous token decoder: converts a token stream to an audio stream.
 
         Args:
             syn_token_gen: Synchronous generator of token strings
@@ -209,30 +212,18 @@ class SnacDecoder:
         Yields:
             Audio data chunks as bytes
         """
-        audio_queue: queue.Queue = queue.Queue()
+        buffer: List[int] = []
+        count: int = 0
 
-        # Convert the synchronous token generator into an async generator
-        async def async_token_gen() -> AsyncGenerator[str, None]:
-            for token in syn_token_gen:
-                yield token
+        for token_text in syn_token_gen:
+            token = self.turn_token_into_id(token_text, count)
+            if token is not None and token > 0:
+                buffer.append(token)
+                count += 1
 
-        async def async_producer() -> None:
-            async for audio_chunk in self.tokens_decoder(async_token_gen()):
-                audio_queue.put(audio_chunk)
-            audio_queue.put(None)  # Sentinel to indicate completion
-
-        def run_async() -> None:
-            asyncio.run(async_producer())
-
-        # Start the async producer in a separate thread
-        thread = threading.Thread(target=run_async)
-        thread.start()
-
-        # Process audio as it becomes available
-        while True:
-            audio = audio_queue.get()
-            if audio is None:
-                break
-            yield audio
-
-        thread.join()
+                if count % TOKENS_PER_FRAME == 0 and count > MIN_TOKENS_FOR_PROCESSING:
+                    audio_samples = self.convert_to_audio(
+                        buffer[-PROCESSING_BUFFER_SIZE:], count
+                    )
+                    if audio_samples is not None:
+                        yield audio_samples

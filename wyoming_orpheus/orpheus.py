@@ -3,9 +3,9 @@
 import logging
 import re
 import sys
-import wave
-from pathlib import Path
-from typing import Generator, List, Optional
+from typing import Generator, List
+
+from llama_cpp import Llama  # type: ignore
 
 from .const import (
     AUDIO_END_TOKEN,
@@ -15,7 +15,6 @@ from .const import (
     EMOTION_TAGS,
     MAX_TOKENS,
     REPETITION_PENALTY,
-    SAMPLE_RATE,
     TEMPERATURE,
     TOP_P,
 )
@@ -30,25 +29,12 @@ def format_prompt(prompt: str, voice: str = DEFAULT_VOICE) -> str:
 
     Args:
         prompt: The text to convert to speech
-        voice: The voice to use for synthesis
+        voice: The voice to use for synthesis (caller is responsible for validation)
 
     Returns:
         A formatted prompt string ready for the model
     """
-    if voice not in AVAILABLE_VOICES:
-        _LOGGER.warning(
-            f"Voice '{voice}' not recognized. Using '{DEFAULT_VOICE}' instead."
-        )
-        voice = DEFAULT_VOICE
-
-    # Format similar to how engine_class.py does it with special tokens
-    formatted_prompt = f"{voice}: {prompt}"
-
-    # Add special token markers
-    special_start = AUDIO_START_TOKEN
-    special_end = AUDIO_END_TOKEN
-
-    return f"{special_start}{formatted_prompt}{special_end}"
+    return f"{AUDIO_START_TOKEN}{voice}: {prompt}{AUDIO_END_TOKEN}"
 
 
 def chunk_text(text: str, max_length: int) -> List[str]:
@@ -86,7 +72,7 @@ def chunk_text(text: str, max_length: int) -> List[str]:
 
 
 def generate_tokens_from_llama(
-    llama_model,
+    llama_model: Llama,
     prompt: str,
     voice: str = DEFAULT_VOICE,
     temperature: float = TEMPERATURE,
@@ -134,98 +120,44 @@ def generate_tokens_from_llama(
     _LOGGER.debug("Token generation complete")
 
 
-def _write_wav(output_file: Path, segments: List[bytes]) -> None:
-    """Write audio segments to a WAV file."""
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    with wave.open(str(output_file), "wb") as wav_file:
-        wav_file.setnchannels(1)
-        wav_file.setsampwidth(2)
-        wav_file.setframerate(SAMPLE_RATE)
-        for segment in segments:
-            wav_file.writeframes(segment)
-
-
-def generate_speech_from_llama(
-    llama_model,
-    snac_decoder: SnacDecoder,
+def generate_speech_stream_sync(
+    llama_model: Llama,
+    snac_decoder: "SnacDecoder",
     prompt: str,
     voice: str = DEFAULT_VOICE,
-    output_file: Optional[Path] = None,
     temperature: float = TEMPERATURE,
     top_p: float = TOP_P,
     max_tokens: int = MAX_TOKENS,
     repetition_penalty: float = REPETITION_PENALTY,
     chunk_max_length: int = 400,
-) -> List[bytes]:
+) -> Generator[bytes, None, None]:
     """
-    Generate speech from text using Orpheus model via llama.cpp.
+    Sync generator that yields raw PCM audio bytes as SNAC produces them.
 
-    Args:
-        llama_model: The loaded llama.cpp model
-        snac_decoder: Shared SnacDecoder instance (must not be re-created per call)
-        prompt: The text to convert to speech
-        voice: The voice to use
-        output_file: Path to output WAV file (optional)
-        temperature: Sampling temperature
-        top_p: Top-p sampling parameter
-        max_tokens: Maximum tokens to generate
-        repetition_penalty: Repetition penalty
-        chunk_max_length: Maximum length of text chunks for processing
-
-    Returns:
-        List of audio segments as bytes
+    Token generation and SNAC decoding run in the calling thread. Yields each
+    audio batch immediately rather than buffering the full result. No WAV file
+    is written.  Each yielded bytes object is 16-bit mono PCM at SAMPLE_RATE Hz.
     """
-    # If prompt is longer than chunk_max_length, split it into chunks
-    if len(prompt) > chunk_max_length:
-        chunks = chunk_text(prompt, chunk_max_length)
-        all_audio_segments: List[bytes] = []
+    chunks = (
+        chunk_text(prompt, chunk_max_length)
+        if len(prompt) > chunk_max_length
+        else [prompt]
+    )
 
-        _LOGGER.info(f"Text split into {len(chunks)} chunks for processing")
+    _LOGGER.info("Streaming speech for %d text chunk(s)", len(chunks))
 
-        for i, chunk in enumerate(chunks):
-            _LOGGER.debug(f"Processing chunk {i + 1}/{len(chunks)}: {chunk[:50]}...")
-
-            token_gen = generate_tokens_from_llama(
-                llama_model=llama_model,
-                prompt=chunk,
-                voice=voice,
-                temperature=temperature,
-                top_p=top_p,
-                max_tokens=max_tokens,
-                repetition_penalty=repetition_penalty,
-            )
-
-            chunk_segments = list(snac_decoder.tokens_decoder_sync(token_gen))
-            all_audio_segments.extend(chunk_segments)
-
-        if output_file:
-            _write_wav(output_file, all_audio_segments)
-
-        duration = (
-            sum([len(segment) // (2 * 1) for segment in all_audio_segments])
-            / SAMPLE_RATE
-        )
-        _LOGGER.info(f"Generated {len(all_audio_segments)} audio segments")
-        _LOGGER.info(f"Generated {duration:.2f} seconds of audio")
-
-        return all_audio_segments
-    else:
+    for i, chunk in enumerate(chunks):
+        _LOGGER.debug("Processing chunk %d/%d: %s...", i + 1, len(chunks), chunk[:50])
         token_gen = generate_tokens_from_llama(
             llama_model=llama_model,
-            prompt=prompt,
+            prompt=chunk,
             voice=voice,
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
             repetition_penalty=repetition_penalty,
         )
-
-        audio_segments = list(snac_decoder.tokens_decoder_sync(token_gen))
-
-        if output_file:
-            _write_wav(output_file, audio_segments)
-
-        return audio_segments
+        yield from snac_decoder.tokens_decoder_sync(token_gen)
 
 
 def list_available_voices() -> None:

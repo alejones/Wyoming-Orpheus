@@ -25,6 +25,9 @@ class OrpheusModelManager:
         self.snac_decoder: Optional[SnacDecoder] = None
         self.model_path = model_config.model_path
         self.lock = asyncio.Lock()
+        # Serializes inference: llama.cpp is not thread-safe for concurrent
+        # calls on the same Llama instance.
+        self.inference_lock = asyncio.Lock()
         self.last_load_attempt = 0.0
         self.load_failed = False
 
@@ -81,6 +84,7 @@ class OrpheusModelManager:
                     self.model = Llama(
                         model_path=str(self.model_path),
                         verbose=False,  # Debug info is handled by our logger
+                        n_gpu_layers=self.config.n_gpu_layers,
                         **context_params,
                     )
                     _LOGGER.info("Model loaded successfully")

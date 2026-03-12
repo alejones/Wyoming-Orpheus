@@ -67,11 +67,22 @@ RUN mkdir -p /models
 ENV MODEL_PATH="orpheus-3b-0.1-ft-q4_K_M.gguf"
 ENV VOICE="tara"
 ENV N_THREADS=4
+ENV N_GPU_LAYERS=0
 ENV PORT=10200
 
 EXPOSE 10200
 
 # Write entrypoint script
-RUN printf '#!/bin/bash\npython3 -m wyoming_orpheus \\\n  --uri "tcp://0.0.0.0:$PORT" \\\n  --voice "$VOICE" \\\n  --n-threads "$N_THREADS" \\\n  --model-path "$MODEL_PATH" \\\n  --model-cache-dir /models \\\n  "$@"\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+RUN cat <<'EOF' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+#!/bin/bash
+python3 -m wyoming_orpheus \
+  --uri "tcp://0.0.0.0:$PORT" \
+  --voice "$VOICE" \
+  --n-threads "$N_THREADS" \
+  --n-gpu-layers "$N_GPU_LAYERS" \
+  --model-path "$MODEL_PATH" \
+  --model-cache-dir /models \
+  "$@"
+EOF
 
 ENTRYPOINT ["/app/entrypoint.sh"]

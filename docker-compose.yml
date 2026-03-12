@@ -1,10 +1,7 @@
-version: '3'
-
 services:
   orpheus-tts:
-    build:
-      context: .
-      dockerfile: Containerfile
+    image: ghcr.io/alejones/wyoming-orpheus:latest
+    container_name: orpheus-tts
     ports:
       - "10200:10200"
     volumes:
@@ -12,6 +9,8 @@ services:
     environment:
       - VOICE=tara
       - N_THREADS=4
+      # Use -1 to offload all layers
+      - N_GPU_LAYERS=0
       - MODEL_PATH=orpheus-3b-0.1-ft-q4_K_M.gguf
       - PORT=10200
     restart: unless-stopped

@@ -1,7 +1,7 @@
 """Pydantic models for Wyoming Orpheus TTS configuration."""
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -103,6 +103,12 @@ class ModelConfig(BaseModel):
         description="Context size in tokens",
     )
 
+    n_gpu_layers: int = Field(
+        default=0,
+        ge=0,
+        description="Number of model layers to offload to GPU (0 = CPU only)",
+    )
+
     verify_model: bool = Field(
         default=False,
         description="Verify model file hash before loading",
@@ -139,7 +145,7 @@ class ServerConfig(BaseModel):
     """
 
     uri: str = Field(
-        default="stdio://",
+        default="tcp://0.0.0.0:10200",
         description="unix:// or tcp:// URI for Wyoming protocol",
     )
 
@@ -180,62 +186,6 @@ class OrpheusConfig(BaseModel):
     tts: TTSConfig = Field(default_factory=TTSConfig)
     model: ModelConfig
     server: ServerConfig
-
-    @classmethod
-    def from_args(cls, args):
-        """Create a configuration object from argparse namespace.
-
-        Uses default values from constants for any missing parameters.
-        """
-        # Convert argparse namespace to dictionary
-        args_dict = vars(args)
-
-        # Helper function to safely get arguments with defaults
-        def get_arg(name: str, default: Any) -> Any:
-            value = args_dict.get(name)
-            return default if value is None else value
-
-        # Create TTS configuration with proper defaults
-        tts_config = TTSConfig(
-            voice=get_arg("voice", DEFAULT_VOICE),
-            temperature=get_arg("temperature", TEMPERATURE),
-            top_p=get_arg("top_p", TOP_P),
-            max_tokens=get_arg("max_tokens", MAX_TOKENS),
-            repetition_penalty=get_arg("repetition_penalty", REPETITION_PENALTY),
-            chunk_max_length=get_arg("chunk_max_length", CHUNK_LIMIT),
-        )
-
-        # Extract required model parameters
-        model_path = args_dict.get("model_path")
-        repo_id = args_dict.get("repo_id")
-
-        # Create model configuration
-        model_config = ModelConfig(
-            model_path=model_path,
-            repo_id=repo_id,
-            n_threads=get_arg("n_threads", DEFAULT_THREADS),
-            n_ctx=get_arg("n_ctx", DEFAULT_CONTEXT_SIZE),
-            verify_model=get_arg("verify_model", False),
-            model_cache_dir=args_dict.get("model_cache_dir"),
-            force_download=get_arg("force_download", False),
-            no_download=get_arg("no_download", False),
-        )
-
-        # Create server configuration
-        server_config = ServerConfig(
-            uri=get_arg("uri", "stdio://"),
-            samples_per_chunk=get_arg("samples_per_chunk", DEFAULT_SAMPLES_PER_CHUNK),
-            sample_rate=SAMPLE_RATE,
-            debug=get_arg("debug", False),
-            log_format=get_arg("log_format", "%(levelname)s: %(message)s"),
-            auto_punctuation=get_arg("auto_punctuation", ".?!"),
-        )
-
-        return cls(
-            tts=tts_config,
-            model=model_config,
-            server=server_config,
-        )
 
     def to_dict(self) -> dict:
         """Convert the configuration to a dictionary."""

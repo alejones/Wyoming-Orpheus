@@ -1,4 +1,5 @@
-# Build and push container image to GitHub Container Registry
+# Build and push container image to GitHub Container Registry.
+# Two jobs: x86_64 (CUDA) and ARM64 Jetson (L4T CUDA).
 name: Build and Push Container
 
 on:
@@ -56,3 +57,48 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
+
+  build-and-push-jetson:
+    # Builds on a native ARM64 runner to avoid QEMU overhead during C++ compilation.
+    # Requires GitHub's ubuntu-24.04-arm runner (available for public repos).
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta-jetson
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}},suffix=-jetson
+            type=ref,event=branch,suffix=-jetson
+            type=sha,format=short,suffix=-jetson
+            type=raw,value=latest-jetson,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build and push (Jetson)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Containerfile.jetson
+          push: true
+          tags: ${{ steps.meta-jetson.outputs.tags }}
+          labels: ${{ steps.meta-jetson.outputs.labels }}
+          cache-from: type=gha,scope=jetson
+          cache-to: type=gha,mode=max,scope=jetson
+          platforms: linux/arm64

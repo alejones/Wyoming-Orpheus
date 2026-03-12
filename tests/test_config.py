@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from wyoming_orpheus.__main__ import _build_config
 from wyoming_orpheus.config import ModelConfig, OrpheusConfig, ServerConfig, TTSConfig
 
 
@@ -167,8 +168,8 @@ def test_config_from_args():
 
     args = MockArgs()
 
-    # Create config from args
-    config = OrpheusConfig.from_args(args)
+    # Create config from args via the CLI builder
+    config = _build_config(args)
 
     # Check values
     assert config.tts.voice == "leo"
